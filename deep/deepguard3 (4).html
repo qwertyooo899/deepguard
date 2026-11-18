@@ -1,0 +1,2846 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>АнтиДипфейк — проверка видео и фото на подделку</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: radial-gradient(ellipse at top, #1a1440 0%, #0a0820 60%);
+  min-height: 100vh; color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 20px;
+}
+header { text-align: center; margin-bottom: 36px; }
+header h1 {
+  font-size: 3rem;
+  background: linear-gradient(90deg, #00f2fe, #4facfe, #a855f7);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -1px; margin-bottom: 10px;
+}
+header p { color: #a0a0c0; max-width: 640px; font-size: 1.02rem; line-height: 1.5; }
+.container {
+  width: 100%; max-width: 820px;
+  background: rgba(255,255,255,0.045);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 24px; padding: 36px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.drop-zone {
+  border: 2px dashed rgba(79,172,254,0.5);
+  border-radius: 16px; padding: 56px 20px;
+  text-align: center; cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgba(79,172,254,0.05);
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: #4facfe;
+  background: rgba(79,172,254,0.15);
+  transform: scale(1.015);
+}
+.drop-zone svg { width: 56px; height: 56px; stroke: #4facfe; margin-bottom: 16px; }
+.drop-zone h3 { font-size: 1.25rem; margin-bottom: 6px; }
+.drop-zone p { color: #a0a0c0; font-size: 0.9rem; }
+.drop-zone input { display: none; }
+.file-info {
+  display: none; margin-top: 20px; padding: 16px;
+  background: rgba(79,172,254,0.1);
+  border: 1px solid rgba(79,172,254,0.3);
+  border-radius: 12px;
+}
+.file-info.show { display: block; }
+.file-info .name { font-weight: 600; margin-bottom: 4px; word-break: break-all; }
+.file-info .size { font-size: 0.85rem; color: #a0a0c0; }
+.preview { margin-top: 20px; text-align: center; }
+.preview video {
+  max-width: 100%; max-height: 320px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.mode-select { margin-top: 26px; }
+.mode-title { font-size: 0.82rem; color: #a0a0c0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.mode-cards { display: flex; gap: 12px; flex-wrap: wrap; }
+.mode-card {
+  flex: 1; min-width: 220px; display: flex; gap: 10px; align-items: center;
+  padding: 13px 16px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer; transition: all 0.25s ease;
+}
+.mode-card:hover { border-color: rgba(79,172,254,0.5); }
+.mode-card.selected {
+  border-color: #4facfe;
+  background: rgba(79,172,254,0.13);
+  box-shadow: inset 0 0 0 1px rgba(79,172,254,0.35);
+}
+.mode-card input { display: none; }
+.mc-icon { font-size: 1.45rem; flex: 0 0 auto; }
+.mc-body b { display: block; font-size: 0.95rem; margin-bottom: 3px; }
+.mc-body small { color: #a0a0c0; font-size: 0.78rem; line-height: 1.35; display: block; }
+.tabs {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  width: 100%; max-width: 820px; margin-bottom: 26px;
+}
+.tab {
+  flex: 1; min-width: 240px; padding: 15px 18px;
+  font-size: 1rem; font-weight: 600; font-family: inherit;
+  color: #c0c0d8; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+  cursor: pointer; transition: all 0.25s ease; letter-spacing: 0.3px;
+}
+.tab:hover { border-color: rgba(79,172,254,0.55); color: #fff; transform: translateY(-1px); }
+.tab.selected {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(79,172,254,0.18), rgba(168,85,247,0.18));
+  border-color: #4facfe;
+  box-shadow: inset 0 0 0 1px rgba(79,172,254,0.3), 0 8px 24px rgba(79,172,254,0.18);
+}
+.preview img {
+  max-width: 100%; max-height: 420px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.btn {
+  display: block; width: 100%; margin-top: 24px;
+  padding: 18px; font-size: 1.05rem; font-weight: 600;
+  color: #fff; border: none; border-radius: 12px;
+  background: linear-gradient(90deg, #4facfe, #a855f7);
+  cursor: pointer; transition: all 0.3s ease;
+  letter-spacing: 0.5px;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(79,172,254,0.4); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.progress-container { display: none; margin-top: 24px; }
+.progress-container.show { display: block; }
+.progress-bar { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4facfe, #a855f7); transition: width 0.35s ease; }
+.progress-text { margin-top: 10px; font-size: 0.9rem; color: #a0a0c0; text-align: center; }
+.error { display: none; margin-top: 20px; padding: 16px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); border-radius: 12px; color: #fca5a5; }
+.error.show { display: block; }
+.result { display: none; margin-top: 24px; padding: 28px; border-radius: 16px; animation: fadeIn 0.5s ease; }
+.result.show { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.result.fake { background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(220,38,38,0.08)); border: 1px solid rgba(239,68,68,0.5); }
+.result.real { background: linear-gradient(135deg, rgba(34,197,94,0.18), rgba(16,185,129,0.08)); border: 1px solid rgba(34,197,94,0.5); }
+.result.suspect { background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(217,119,6,0.07)); border: 1px solid rgba(245,158,11,0.5); }
+.result .icon { font-size: 3rem; margin-bottom: 8px; text-align: center; }
+.result h2 { font-size: 1.7rem; margin-bottom: 8px; text-align: center; }
+.result .confidence { font-size: 1rem; color: #d0d0e0; margin-bottom: 14px; text-align: center; }
+.confidence-bar { height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; margin: 14px 0; }
+.confidence-fill { height: 100%; border-radius: 5px; transition: width 1s ease; width: 0; }
+.result.fake .confidence-fill { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.result.real .confidence-fill { background: linear-gradient(90deg, #22c55e, #10b981); }
+.result.suspect .confidence-fill { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.features-list { margin-top: 18px; }
+.features-list h4, .chart-box h4 { font-size: 0.9rem; color: #a0a0c0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.feature-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 0.9rem; }
+.feature-row .label { flex: 0 0 210px; color: #d0d0e0; }
+.feature-row .bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+.feature-row .bar-val { height: 100%; width: 0; background: linear-gradient(90deg, #4facfe, #a855f7); border-radius: 3px; transition: width 0.8s ease; }
+.feature-row .num { flex: 0 0 46px; text-align: right; color: #a0a0c0; font-size: 0.82rem; }
+.chart-box { margin-top: 20px; }
+.chart-box canvas { width: 100%; height: 110px; display: block; border-radius: 10px; }
+.chart-caption { font-size: 0.75rem; color: #8080a0; margin-top: 6px; text-align: center; }
+.teach { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); }
+.teach-q { font-size: 0.9rem; color: #a0a0c0; margin-bottom: 12px; text-align: center; }
+.teach-q b { color: #e8e8f5; }
+.teach-btns { display: flex; gap: 12px; justify-content: center; }
+.teach-btn {
+  flex: 1; max-width: 220px; padding: 12px 16px;
+  border-radius: 10px; cursor: pointer; font-size: 0.92rem; font-weight: 600;
+  color: #fff; background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.22);
+  transition: all 0.25s ease;
+}
+.teach-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.teach-btn.real:hover:not(:disabled) { border-color: #22c55e; background: rgba(34,197,94,0.16); }
+.teach-btn.fake:hover:not(:disabled) { border-color: #ef4444; background: rgba(239,68,68,0.16); }
+.teach-btn:disabled { opacity: 0.4; cursor: default; }
+.fb-comment {
+  width: 100%; margin-top: 12px; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: #fff;
+  font-family: inherit; font-size: 0.88rem; resize: vertical;
+}
+.fb-comment:focus { outline: none; border-color: #4facfe; }
+.teach-status { margin-top: 12px; font-size: 0.84rem; color: #86efac; text-align: center; min-height: 1.2em; }
+.meta { margin-top: 12px; font-size: 0.82rem; color: #8080a0; text-align: center; }
+.reset-btn { margin-top: 18px; padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: block; margin-left: auto; margin-right: auto; }
+.reset-btn:hover { background: rgba(255,255,255,0.2); }
+.model-panel {
+  width: 100%; max-width: 820px; margin-top: 22px;
+  background: rgba(255,255,255,0.035);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px; padding: 22px 28px;
+}
+.mp-title { font-weight: 700; font-size: 0.98rem; margin-bottom: 10px; }
+.mp-stats { color: #a0a0c0; font-size: 0.86rem; line-height: 1.65; }
+.mp-stats b { color: #e0e0f0; }
+.mp-journal { margin-top: 12px; max-height: 190px; overflow-y: auto; font-size: 0.8rem; color: #a0a0c0; line-height: 1.55; }
+.mp-journal:empty { display: none; }
+.mp-journal .jr { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.mp-journal .jr b { color: #d0d0e0; }
+.mp-journal .jr.ok b { color: #86efac; }
+.mp-journal .jr.fix b { color: #fca5a5; }
+.mp-journal .jr.auto b { color: #9cc0f0; }
+.mp-actions { margin-top: 14px; }
+.mp-actions button {
+  padding: 8px 16px; font-size: 0.82rem; color: #c0c0d8;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px; cursor: pointer;
+}
+.mp-actions button:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+.mem-toggle-wrap { width: 100%; max-width: 820px; margin-top: 22px; text-align: center; }
+.mem-toggle {
+  padding: 12px 26px; font-size: 0.95rem; font-weight: 600; font-family: inherit;
+  color: #c0c0d8; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+  cursor: pointer; transition: all 0.25s ease; letter-spacing: 0.3px;
+}
+.mem-toggle:hover { border-color: rgba(79,172,254,0.55); color: #fff; }
+.mp-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.mp-tab {
+  flex: 1; padding: 10px 14px; font-size: 0.9rem; font-weight: 600; font-family: inherit;
+  color: #c0c0d8; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.mp-tab:hover { border-color: rgba(79,172,254,0.5); color: #fff; }
+.mp-tab.selected {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(79,172,254,0.16), rgba(168,85,247,0.16));
+  border-color: #4facfe;
+}
+.footer-note { margin-top: 26px; color: #6a6a8a; font-size: 0.8rem; text-align: center; max-width: 640px; line-height: 1.5; }
+.url-box { margin-top: 18px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.12); }
+.url-title { font-size: 0.82rem; color: #a0a0c0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; text-align: center; }
+.url-row { display: flex; gap: 10px; }
+.url-input {
+  flex: 1; min-width: 0; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: #fff;
+  font-family: inherit; font-size: 0.9rem;
+}
+.url-input::placeholder { color: #6a6a8a; }
+.url-input:focus { outline: none; border-color: #4facfe; }
+.url-input:disabled { opacity: 0.55; }
+.url-btn {
+  flex: 0 0 auto; padding: 12px 20px; font-size: 0.9rem; font-weight: 600;
+  color: #fff; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(90deg, #4facfe, #a855f7);
+  transition: all 0.25s ease; font-family: inherit;
+}
+.url-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(79,172,254,0.35); }
+.url-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.url-hint { margin-top: 10px; font-size: 0.78rem; color: #6a6a8a; line-height: 1.5; }
+#mpExport:hover, #mpImport:hover { background: rgba(79,172,254,0.14); border-color: rgba(79,172,254,0.45); color: #9cc0f0; }
+.mp-status { margin-top: 10px; font-size: 0.82rem; color: #86efac; line-height: 1.5; overflow-wrap: anywhere; }
+.mp-status:empty { display: none; }
+.mp-status.err { color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛡️ АнтиДипфейк</h1>
+  <p>Проверка видео и фотографий на подделку. Нейросеть изучает каждый кадр видео и само изображение целиком: спектр, шум, лицо, моргания и стабильность — а после каждой проверки дообучается, в том числе на вашем отзыве «верно / неверно». Всё считается локально, файлы никуда не отправляются.</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab selected" id="tabVideo" type="button">🎬 Проверка видео</button>
+  <button class="tab" id="tabPhoto" type="button">🖼️ Проверка фото</button>
+</nav>
+
+<div class="container" id="videoApp">
+  <div class="drop-zone" id="dropZone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+    </svg>
+    <h3>Перетащите видео сюда</h3>
+    <p>или нажмите для выбора файла — MP4, MOV, WebM, AVI</p>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+
+  <div class="url-box">
+    <div class="url-title">или проверьте видео по ссылке</div>
+    <div class="url-row">
+      <input type="url" id="videoUrl" class="url-input" placeholder="https://example.com/video.mp4" spellcheck="false" autocomplete="off">
+      <button class="url-btn" id="loadUrlBtn" type="button">Загрузить</button>
+    </div>
+    <div class="url-hint">Нужна прямая ссылка на сам файл (.mp4, .webm, .mov) — видео скачается во временный буфер браузера и проверится локально, нигде не сохраняясь. Ссылки на страницы YouTube, VK и TikTok браузер скачать не даёт (защита CORS) — для них скачайте видео на устройство и перетащите файл сюда.</div>
+  </div>
+
+  <div class="file-info" id="fileInfo">
+    <div class="name" id="fileName"></div>
+    <div class="size" id="fileSize"></div>
+  </div>
+
+  <div class="preview" id="preview"></div>
+
+  <div class="mode-select" id="modeSelect">
+    <div class="mode-title">Режим анализа</div>
+    <div class="mode-cards">
+      <label class="mode-card" id="modeCardFast">
+        <input type="radio" name="mode" value="fast">
+        <span class="mc-icon">⚡</span>
+        <span class="mc-body"><b>Быстрый</b><small>до 200 кадров всего видео — результат за десятки секунд</small></span>
+      </label>
+      <label class="mode-card selected" id="modeCardSlow">
+        <input type="radio" name="mode" value="slow" checked>
+        <span class="mc-icon">🎯</span>
+        <span class="mc-body"><b>Точный (медленный)</b><small>каждый кадр всего видео, до 1000 кадров — максимальная точность</small></span>
+      </label>
+    </div>
+  </div>
+
+  <button class="btn" id="analyzeBtn" disabled>🔍 Анализировать видео</button>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">Подготовка…</div>
+  </div>
+
+  <div class="error" id="errorBox"></div>
+
+  <div class="result" id="result">
+    <div class="icon" id="resultIcon"></div>
+    <h2 id="resultTitle"></h2>
+    <div class="confidence" id="resultConfidence"></div>
+    <div class="confidence-bar"><div class="confidence-fill" id="confidenceFill"></div></div>
+    <div class="features-list">
+      <h4>Разбор признаков</h4>
+      <div id="featuresContainer"></div>
+    </div>
+    <div class="chart-box" id="chartBox">
+      <h4>Признаки подделки по ходу видео</h4>
+      <canvas id="chartCanvas"></canvas>
+      <div class="chart-caption" id="chartCaption"></div>
+    </div>
+    <div class="teach" id="teachBox">
+      <div class="teach-q">Ваш отзыв: нейросеть посчитала видео <b id="fbPredWord">…</b>. Она определила правильно?</div>
+      <div class="teach-btns" id="fbMain">
+        <button class="teach-btn real" id="fbYes">✅ Да, верно</button>
+        <button class="teach-btn fake" id="fbNo">❌ Нет, неверно</button>
+      </div>
+      <div id="fbCorrect" style="display:none">
+        <div class="teach-q">А как на самом деле?</div>
+        <div class="teach-btns">
+          <button class="teach-btn real" id="fbFixReal">Настоящее видео</button>
+          <button class="teach-btn fake" id="fbFixFake">Дипфейк</button>
+        </div>
+        <textarea id="fbComment" class="fb-comment" rows="2" placeholder="Комментарий (необязательно) — например, что именно не так"></textarea>
+      </div>
+      <div class="teach-status" id="teachStatus"></div>
+    </div>
+    <div class="meta" id="resultMeta"></div>
+    <button class="reset-btn" id="resetBtn">Проверить другое видео</button>
+  </div>
+</div>
+
+<div class="container" id="photoApp" style="display:none">
+  <div class="drop-zone" id="pDropZone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M2.25 15.75V6A1.5 1.5 0 013.75 4.5h16.5A1.5 1.5 0 0121 6v12a1.5 1.5 0 01-1.5 1.5H3.75A1.5 1.5 0 012.25 18v-2.25zM17.25 9h.008v.008h-.008V9z" />
+    </svg>
+    <h3>Перетащите фото сюда</h3>
+    <p>или нажмите для выбора файла — JPG, PNG, WebP</p>
+    <input type="file" id="pFileInput" accept="image/*">
+  </div>
+
+  <div class="file-info" id="pFileInfo">
+    <div class="name" id="pFileName"></div>
+    <div class="size" id="pFileSize"></div>
+  </div>
+
+  <div class="preview" id="pPreview"></div>
+
+  <button class="btn" id="pAnalyzeBtn" disabled>🔍 Анализировать фото</button>
+
+  <div class="progress-container" id="pProgressContainer">
+    <div class="progress-bar"><div class="progress-fill" id="pProgressFill"></div></div>
+    <div class="progress-text" id="pProgressText">Подготовка…</div>
+  </div>
+
+  <div class="error" id="pErrorBox"></div>
+
+  <div class="result" id="pResult">
+    <div class="icon" id="pResultIcon"></div>
+    <h2 id="pResultTitle"></h2>
+    <div class="confidence" id="pResultConfidence"></div>
+    <div class="confidence-bar"><div class="confidence-fill" id="pConfidenceFill"></div></div>
+    <div class="features-list">
+      <h4>Разбор признаков</h4>
+      <div id="pFeaturesContainer"></div>
+    </div>
+    <div class="chart-box" id="pChartBox">
+      <h4>Карта подозрительных областей</h4>
+      <canvas id="pChartCanvas" style="height:180px"></canvas>
+      <div class="chart-caption" id="pChartCaption"></div>
+    </div>
+    <div class="teach" id="pTeachBox">
+      <div class="teach-q">Ваш отзыв: нейросеть посчитала фото <b id="pFbPredWord">…</b>. Она определила правильно?</div>
+      <div class="teach-btns" id="pFbMain">
+        <button class="teach-btn real" id="pFbYes">✅ Да, верно</button>
+        <button class="teach-btn fake" id="pFbNo">❌ Нет, неверно</button>
+      </div>
+      <div id="pFbCorrect" style="display:none">
+        <div class="teach-q">А как на самом деле?</div>
+        <div class="teach-btns">
+          <button class="teach-btn real" id="pFbFixReal">Настоящее фото</button>
+          <button class="teach-btn fake" id="pFbFixFake">Сгенерированное фото</button>
+        </div>
+        <textarea id="pFbComment" class="fb-comment" rows="2" placeholder="Комментарий (необязательно) — например, что именно не так"></textarea>
+      </div>
+      <div class="teach-status" id="pTeachStatus"></div>
+    </div>
+    <div class="meta" id="pResultMeta"></div>
+    <button class="reset-btn" id="pResetBtn">Проверить другое фото</button>
+  </div>
+</div>
+
+<div class="mem-toggle-wrap">
+  <button class="mem-toggle" id="memToggle" type="button">🧠 Память нейросети — показать</button>
+</div>
+
+<div class="model-panel" id="modelPanel" style="display:none">
+  <div class="mp-title">🧠 Память нейросети — обучение на этом устройстве</div>
+  <div class="mp-tabs">
+    <button class="mp-tab selected" id="mpTabVideo" type="button">🎬 Видео</button>
+    <button class="mp-tab" id="mpTabPhoto" type="button">🖼️ Фото</button>
+  </div>
+  <div class="mp-stats" id="mpStats"></div>
+  <div class="mp-journal" id="mpJournal"></div>
+  <div class="mp-actions">
+    <button id="mpExport">💾 Скачать память</button>
+    <button id="mpImport">📂 Загрузить память</button>
+    <button id="mpReset">Сбросить обучение</button>
+    <input type="file" id="mpImportFile" accept=".json,application/json" style="display:none">
+    <div class="mp-status" id="mpStatus"></div>
+  </div>
+</div>
+
+<div class="footer-note">
+  ⚠️ Покадровый форензический анализ видео и целостный разбор фотографий + самообучающиеся модели. После каждой проверки модель автоматически получает новый пример, а ваш отзыв «верно / неверно» сразу исправляет её веса. Базы примеров и журналы обучения хранятся только в этом браузере. Кнопка «💾 Скачать память» сохраняет всё обучение в файл — на другом устройстве нажмите «📂 Загрузить память», и нейросеть продолжит с того же места. Видео можно проверять и по прямой ссылке на файл: скачивание и анализ идут локально, нигде не сохраняются.
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /*__PURE_START__*/
+  var WORK_MAX = 960;
+  var FFT_N = 128;
+  var THUMB_N = 32;
+  var CHROMA_N = 16;
+  var MODE_FAST_FRAMES = 200;
+  var MODE_SLOW_FRAMES = 1000;
+  var MODE_SLOW_MAX_MS = 300000;
+  var MODE_FAST_MAX_MS = 90000;
+
+  function clip01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+  function median(arr) {
+    if (!arr || !arr.length) return 0;
+    var a = Array.prototype.slice.call(arr);
+    a.sort(function (p, q) { return p - q; });
+    var m = a.length >> 1;
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+  }
+
+  function pearson(a, b) {
+    var n = a.length < b.length ? a.length : b.length;
+    if (n < 16) return 0;
+    var sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+    for (var i = 0; i < n; i++) {
+      var x = a[i], y = b[i];
+      sa += x; sb += y; saa += x * x; sbb += y * y; sab += x * y;
+    }
+    var va = saa / n - (sa / n) * (sa / n);
+    var vb = sbb / n - (sb / n) * (sb / n);
+    if (va < 1e-12 || vb < 1e-12) return 0;
+    return (sab / n - (sa / n) * (sb / n)) / Math.sqrt(va * vb);
+  }
+
+  function cropResizeGray(data, W, H, bx, by, bw, bh, outN) {
+    var out = new Float32Array(outN * outN);
+    for (var y = 0; y < outN; y++) {
+      var sy = by + (y + 0.5) * bh / outN - 0.5;
+      if (sy < 0) sy = 0; if (sy > H - 1) sy = H - 1;
+      var y0 = Math.floor(sy), y1 = Math.min(H - 1, y0 + 1), fy = sy - y0;
+      for (var x = 0; x < outN; x++) {
+        var sx = bx + (x + 0.5) * bw / outN - 0.5;
+        if (sx < 0) sx = 0; if (sx > W - 1) sx = W - 1;
+        var x0 = Math.floor(sx), x1 = Math.min(W - 1, x0 + 1), fx = sx - x0;
+        var i00 = (y0 * W + x0) * 4, i10 = (y0 * W + x1) * 4;
+        var i01 = (y1 * W + x0) * 4, i11 = (y1 * W + x1) * 4;
+        var g00 = 0.299 * data[i00] + 0.587 * data[i00 + 1] + 0.114 * data[i00 + 2];
+        var g10 = 0.299 * data[i10] + 0.587 * data[i10 + 1] + 0.114 * data[i10 + 2];
+        var g01 = 0.299 * data[i01] + 0.587 * data[i01 + 1] + 0.114 * data[i01 + 2];
+        var g11 = 0.299 * data[i11] + 0.587 * data[i11 + 1] + 0.114 * data[i11 + 2];
+        var g0 = g00 + (g10 - g00) * fx;
+        var g1 = g01 + (g11 - g01) * fx;
+        out[y * outN + x] = (g0 + (g1 - g0) * fy) / 255;
+      }
+    }
+    return out;
+  }
+
+  function extractRegionPlanes(data, W, H, bx, by, bw, bh, maxSide) {
+    var stride = Math.max(1, Math.ceil(Math.max(bw, bh) / maxSide));
+    var w = Math.max(2, Math.floor(bw / stride));
+    var h = Math.max(2, Math.floor(bh / stride));
+    var g = new Float32Array(w * h), cb = new Float32Array(w * h), cr = new Float32Array(w * h);
+    for (var y = 0; y < h; y++) {
+      var sy = Math.min(H - 1, by + Math.round(y * stride));
+      for (var x = 0; x < w; x++) {
+        var sx = Math.min(W - 1, bx + Math.round(x * stride));
+        var i = (sy * W + sx) * 4, R = data[i], G = data[i + 1], B = data[i + 2];
+        var k = y * w + x;
+        g[k] = (0.299 * R + 0.587 * G + 0.114 * B) / 255;
+        cb[k] = (128 - 0.168736 * R - 0.331264 * G + 0.5 * B) / 255;
+        cr[k] = (128 + 0.5 * R - 0.418688 * G - 0.081312 * B) / 255;
+      }
+    }
+    return { g: g, cb: cb, cr: cr, w: w, h: h, stride: stride };
+  }
+
+  function gaussResidualMAD(g, w, h) {
+    var n = (w - 2) * (h - 2);
+    if (n < 32) return 0;
+    var res = new Float32Array(n), k = 0;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        var blur = (g[i - w - 1] + 2 * g[i - w] + g[i - w + 1] +
+                    2 * g[i - 1] + 4 * g[i] + 2 * g[i + 1] +
+                    g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]) / 16;
+        res[k++] = g[i] - blur;
+      }
+    }
+    var m = median(res);
+    var dev = new Float32Array(n);
+    for (var j = 0; j < n; j++) dev[j] = Math.abs(res[j] - m);
+    return 1.4826 * median(dev);
+  }
+
+  function lapAbsArr(g, w, h) {
+    var out = new Float32Array((w - 2) * (h - 2)), k = 0;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        out[k++] = Math.abs(4 * g[i] - g[i - w] - g[i + w] - g[i - 1] - g[i + 1]);
+      }
+    }
+    return out;
+  }
+
+  function meanAbsLap(g, w, h) {
+    var a = lapAbsArr(g, w, h);
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return s / a.length;
+  }
+
+  function laplacianVar(g, w, h) {
+    var sum = 0, sum2 = 0, n = 0;
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        var v = 4 * g[i] - g[i - w] - g[i + w] - g[i - 1] - g[i + 1];
+        sum += v; sum2 += v * v; n++;
+      }
+    }
+    if (n === 0) return 0;
+    var mean = sum / n;
+    var v2 = sum2 / n - mean * mean;
+    return v2 > 0 ? v2 : 0;
+  }
+
+  function tileCV(g, w, h, nt) {
+    var tw = Math.floor(w / nt), th = Math.floor(h / nt);
+    if (tw < 8 || th < 8) return 0;
+    var vals = [];
+    for (var ty = 0; ty < nt; ty++) {
+      for (var tx = 0; tx < nt; tx++) {
+        var s = 0, s2 = 0, c = 0;
+        var yTop = 1 + ty * th, xLeft = 1 + tx * tw;
+        for (var y = yTop; y < yTop + th - 1 && y < h - 1; y++) {
+          for (var x = xLeft; x < xLeft + tw - 1 && x < w - 1; x++) {
+            var i = y * w + x;
+            var v = 4 * g[i] - g[i - w] - g[i + w] - g[i - 1] - g[i + 1];
+            s += v; s2 += v * v; c++;
+          }
+        }
+        if (c > 16) {
+          var m = s / c;
+          var va = s2 / c - m * m;
+          if (va > 0) vals.push(va);
+        }
+      }
+    }
+    if (vals.length < 6) return 0;
+    var mean = 0;
+    for (var i2 = 0; i2 < vals.length; i2++) mean += vals[i2];
+    mean /= vals.length;
+    if (mean < 1e-9) return 0;
+    var vs = 0;
+    for (var j = 0; j < vals.length; j++) vs += (vals[j] - mean) * (vals[j] - mean);
+    return Math.sqrt(vs / vals.length) / mean;
+  }
+
+  var HANN_CACHE = {};
+  function hannArr(n) {
+    if (!HANN_CACHE[n]) {
+      var a = new Float64Array(n);
+      for (var i = 0; i < n; i++) a[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / n));
+      HANN_CACHE[n] = a;
+    }
+    return HANN_CACHE[n];
+  }
+
+  function fft1d(re, im) {
+    var n = re.length;
+    for (var i = 1, j = 0; i < n; i++) {
+      var bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        var tr = re[i]; re[i] = re[j]; re[j] = tr;
+        var ti = im[i]; im[i] = im[j]; im[j] = ti;
+      }
+    }
+    for (var len = 2; len <= n; len <<= 1) {
+      var half = len >> 1;
+      var ang = -2 * Math.PI / len;
+      var wRe = Math.cos(ang), wIm = Math.sin(ang);
+      for (var i2 = 0; i2 < n; i2 += len) {
+        var curRe = 1, curIm = 0;
+        for (var j2 = 0; j2 < half; j2++) {
+          var uRe = re[i2 + j2], uIm = im[i2 + j2];
+          var vRe = re[i2 + j2 + half] * curRe - im[i2 + j2 + half] * curIm;
+          var vIm = re[i2 + j2 + half] * curIm + im[i2 + j2 + half] * curRe;
+          re[i2 + j2] = uRe + vRe;
+          im[i2 + j2] = uIm + vIm;
+          re[i2 + j2 + half] = uRe - vRe;
+          im[i2 + j2 + half] = uIm - vIm;
+          var nRe = curRe * wRe - curIm * wIm;
+          curIm = curRe * wIm + curIm * wRe;
+          curRe = nRe;
+        }
+      }
+    }
+  }
+
+  function fft2dPower(gray, n) {
+    var hn = hannArr(n);
+    var re = [], im = [];
+    for (var y = 0; y < n; y++) {
+      var r = new Float64Array(n), m = new Float64Array(n);
+      for (var x = 0; x < n; x++) r[x] = gray[y * n + x] * hn[x] * hn[y];
+      re.push(r); im.push(m);
+    }
+    for (var y2 = 0; y2 < n; y2++) fft1d(re[y2], im[y2]);
+    var cr = new Float64Array(n), ci = new Float64Array(n);
+    for (var x2 = 0; x2 < n; x2++) {
+      for (var y3 = 0; y3 < n; y3++) { cr[y3] = re[y3][x2]; ci[y3] = im[y3][x2]; }
+      fft1d(cr, ci);
+      for (var y4 = 0; y4 < n; y4++) { re[y4][x2] = cr[y4]; im[y4][x2] = ci[y4]; }
+    }
+    var half = n >> 1, pow = new Float32Array(n * n);
+    for (var y5 = 0; y5 < n; y5++) {
+      for (var x5 = 0; x5 < n; x5++) {
+        var sy = (y5 + half) % n, sx = (x5 + half) % n;
+        var pr = re[sy][sx], pi = im[sy][sx];
+        pow[y5 * n + x5] = pr * pr + pi * pi;
+      }
+    }
+    return pow;
+  }
+
+  function spectralHf(pow, n) {
+    var half = n >> 1, hiMid = 0, high = 0;
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        var dx = x - half, dy = y - half;
+        var r = Math.sqrt(dx * dx + dy * dy) / half;
+        if (r <= 0.25) continue;
+        var p = pow[y * n + x];
+        if (r <= 0.55) hiMid += p; else high += p;
+      }
+    }
+    return { hfRatio: high / Math.max(hiMid, 1e-12), energy: high + hiMid };
+  }
+
+  var SPIK_CACHE = {};
+  function spikTables(n) {
+    if (SPIK_CACHE[n]) return SPIK_CACHE[n];
+    var half = n >> 1;
+    var NR = 20, NA = 72;
+    var ang = new Int16Array(n * n), rad = new Int16Array(n * n), inRing = new Uint8Array(n * n);
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        var dx = x - half, dy = y - half;
+        var r = Math.sqrt(dx * dx + dy * dy) / half;
+        var k = y * n + x;
+        if (r <= 0.30 || r > 1.02) { inRing[k] = 0; continue; }
+        inRing[k] = 1;
+        var ri = Math.floor((r - 0.30) / 0.73 * NR);
+        if (ri >= NR) ri = NR - 1; if (ri < 0) ri = 0;
+        rad[k] = ri;
+        var a = Math.atan2(dy, dx);
+        var ai = Math.floor((a + Math.PI) / (2 * Math.PI) * NA);
+        if (ai >= NA) ai = NA - 1; if (ai < 0) ai = 0;
+        ang[k] = ai;
+      }
+    }
+    SPIK_CACHE[n] = { ang: ang, rad: rad, inRing: inRing, NR: NR, NA: NA };
+    return SPIK_CACHE[n];
+  }
+
+  function spectralPeaks(pow, n) {
+    var T = spikTables(n);
+    var NR = T.NR, NA = T.NA;
+    var ringVals = [];
+    for (var ri = 0; ri < NR; ri++) ringVals.push([]);
+    for (var k = 0; k < pow.length; k++) {
+      if (T.inRing[k]) ringVals[T.rad[k]].push(pow[k]);
+    }
+    var base = [];
+    for (var ri2 = 0; ri2 < NR; ri2++) base.push(median(ringVals[ri2]));
+    var P = new Float64Array(NA);
+    var totalEx = 0;
+    for (var k2 = 0; k2 < pow.length; k2++) {
+      if (!T.inRing[k2]) continue;
+      var ex = pow[k2] - base[T.rad[k2]];
+      if (ex > 0) { P[T.ang[k2]] += ex; totalEx += ex; }
+    }
+    if (totalEx < 1e-12) return 0;
+    var Ps = new Float64Array(NA);
+    for (var a = 0; a < NA; a++) {
+      Ps[a] = (P[(a + NA - 1) % NA] + 2 * P[a] + P[(a + 1) % NA]) / 4;
+    }
+    var sorted = Array.prototype.slice.call(Ps).sort(function (p, q) { return q - p; });
+    var top4 = sorted[0] + sorted[1] + sorted[2] + sorted[3];
+    return top4 / totalEx;
+  }
+
+  function morph(m, w, h, op) {
+    var out = new Uint8Array(m.length);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var i = y * w + x;
+        if (op === 'erode') {
+          var keep = 1;
+          for (var dy = -1; dy <= 1 && keep; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              if (!dy && !dx) continue;
+              var yy = y + dy, xx = x + dx;
+              var q = (yy < 0 || yy >= h || xx < 0 || xx >= w) ? 0 : m[yy * w + xx];
+              if (!q) { keep = 0; break; }
+            }
+          }
+          out[i] = m[i] ? keep : 0;
+        } else {
+          var any = 0;
+          for (var dy2 = -1; dy2 <= 1 && !any; dy2++) {
+            for (var dx2 = -1; dx2 <= 1; dx2++) {
+              if (!dy2 && !dx2) continue;
+              var yy2 = y + dy2, xx2 = x + dx2;
+              if (yy2 < 0 || yy2 >= h || xx2 < 0 || xx2 >= w) continue;
+              if (m[yy2 * w + xx2]) { any = 1; break; }
+            }
+          }
+          out[i] = (m[i] || any) ? 1 : 0;
+        }
+      }
+    }
+    return out;
+  }
+
+  function skinDetectBox(data, W, H) {
+    var step = Math.max(1, Math.ceil(Math.max(W, H) / 140));
+    var dw = Math.floor(W / step), dh = Math.floor(H / step);
+    if (dw < 24 || dh < 24) return null;
+    var mask = new Uint8Array(dw * dh);
+    for (var y = 0; y < dh; y++) {
+      for (var x = 0; x < dw; x++) {
+        var i = (y * step) * W + (x * step);
+        i *= 4;
+        var R = data[i], G = data[i + 1], B = data[i + 2];
+        var Y = 0.299 * R + 0.587 * G + 0.114 * B;
+        var Cb = 128 - 0.168736 * R - 0.331264 * G + 0.5 * B;
+        var Cr = 128 + 0.5 * R - 0.418688 * G - 0.081312 * B;
+        mask[y * dw + x] = (Y > 64 && Cb >= 80 && Cb <= 131 && Cr >= 134 && Cr <= 176) ? 1 : 0;
+      }
+    }
+    mask = morph(morph(morph(mask, dw, dh, 'erode'), dw, dh, 'dilate'), dw, dh, 'dilate');
+
+    var label = new Uint8Array(dw * dh);
+    var stack = new Int32Array(dw * dh);
+    var best = null, bestArea = 0;
+    for (var i0 = 0; i0 < dw * dh; i0++) {
+      if (mask[i0] && !label[i0]) {
+        var sp = 0;
+        stack[sp++] = i0; label[i0] = 1;
+        var minX = dw, maxX = -1, minY = dh, maxY = -1, area = 0;
+        while (sp) {
+          var cur = stack[--sp];
+          var cy = (cur / dw) | 0, cx = cur - cy * dw;
+          area++;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
+          if (cx > 0 && mask[cur - 1] && !label[cur - 1]) { label[cur - 1] = 1; stack[sp++] = cur - 1; }
+          if (cx < dw - 1 && mask[cur + 1] && !label[cur + 1]) { label[cur + 1] = 1; stack[sp++] = cur + 1; }
+          if (cy > 0 && mask[cur - dw] && !label[cur - dw]) { label[cur - dw] = 1; stack[sp++] = cur - dw; }
+          if (cy < dh - 1 && mask[cur + dw] && !label[cur + dw]) { label[cur + dw] = 1; stack[sp++] = cur + dw; }
+        }
+        if (area > bestArea) { bestArea = area; best = { minX: minX, maxX: maxX, minY: minY, maxY: maxY, area: area }; }
+      }
+    }
+    if (!best) return null;
+    var bw = best.maxX - best.minX + 1, bh = best.maxY - best.minY + 1;
+    if (bw < 6 || bh < 6) return null;
+    if (best.area / (dw * dh) < 0.012) return null;
+    if (best.area / (bw * bh) < 0.34) return null;
+    var aspect = bw / bh;
+    if (aspect < 0.35 || aspect > 2.8) return null;
+    var cx2 = (best.minX + best.maxX + 1) / 2 - 0.05 * bh;
+    var cy2 = (best.minY + best.maxY + 1) / 2;
+    var bw2 = bw * 1.55, bh2 = bh * 1.7;
+    var bx = Math.round((cx2 - bw2 / 2) * step), by = Math.round((cy2 - bh2 / 2) * step);
+    var w2 = Math.round(bw2 * step), h2 = Math.round(bh2 * step);
+    if (bx < 0) bx = 0; if (by < 0) by = 0;
+    if (bx + w2 > W) w2 = W - bx;
+    if (by + h2 > H) h2 = H - by;
+    if (w2 < 24 || h2 < 24) return null;
+    return { x: bx, y: by, w: w2, h: h2 };
+  }
+
+  // --- новые признаки v3: хрома-дрожь, моргания, симметрия ---
+
+  function chromaThumb(cb, cr, w, h) {
+    var N = CHROMA_N;
+    var out = new Float32Array(2 * N * N);
+    for (var ty = 0; ty < N; ty++) {
+      var sy0 = Math.floor(ty * h / N);
+      var sy1 = Math.max(sy0 + 1, Math.floor((ty + 1) * h / N));
+      for (var tx = 0; tx < N; tx++) {
+        var sx0 = Math.floor(tx * w / N);
+        var sx1 = Math.max(sx0 + 1, Math.floor((tx + 1) * w / N));
+        var sc = 0, sr = 0, c = 0;
+        for (var y = sy0; y < sy1 && y < h; y++) {
+          for (var x = sx0; x < sx1 && x < w; x++) {
+            sc += cb[y * w + x];
+            sr += cr[y * w + x];
+            c++;
+          }
+        }
+        if (!c) c = 1;
+        out[ty * N + tx] = sc / c;
+        out[N * N + ty * N + tx] = sr / c;
+      }
+    }
+    return out;
+  }
+
+  function chromaThumbTop(data, W, H) {
+    var th = Math.max(10, Math.min(40, Math.round(Math.min(W, H) * 0.07)));
+    var rp = extractRegionPlanes(data, W, H, 0, 0, W, th, 240);
+    return chromaThumb(rp.cb, rp.cr, rp.w, rp.h);
+  }
+
+  function chromaDelta(a, b) {
+    if (!a || !b) return -1;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+    return s / a.length;
+  }
+
+  function eyeBandMean(g, w, h) {
+    var x0 = Math.floor(w * 0.20), x1 = Math.ceil(w * 0.80);
+    var y0 = Math.floor(h * 0.08), y1 = Math.ceil(h * 0.34);
+    if (x1 - x0 < 8 || y1 - y0 < 4) return -1;
+    var s = 0, c = 0;
+    for (var y = y0; y < y1; y++) {
+      for (var x = x0; x < x1; x++) { s += g[y * w + x]; c++; }
+    }
+    return s / c;
+  }
+
+  function symmetryRatio(g, w, h) {
+    // структурная асимметрия: усредняем к 48x48 (шум и полосы гибнут,
+    // остаются черты лица), сравниваем половины относительно центра лица
+    var N = 48;
+    var gx = Math.floor(w * 0.26), gw = Math.ceil(w * 0.48);
+    var gy = Math.floor(h * 0.24), gh = Math.ceil(h * 0.46);
+    if (gw < 24 || gh < 24) return -1;
+    var buf = new Float32Array(N * N);
+    for (var y = 0; y < N; y++) {
+      var sy0 = gy + Math.floor(y * gh / N);
+      var sy1 = gy + Math.max(sy0 - gy + 1, Math.floor((y + 1) * gh / N));
+      for (var x = 0; x < N; x++) {
+        var sx0 = gx + Math.floor(x * gw / N);
+        var sx1 = gx + Math.max(sx0 - gx + 1, Math.floor((x + 1) * gw / N));
+        var s = 0, c = 0;
+        for (var yy = sy0; yy < sy1 && yy < h; yy++) {
+          for (var xx = sx0; xx < sx1 && xx < w; xx++) { s += g[yy * w + xx]; c++; }
+        }
+        buf[y * N + x] = c ? s / c : 0;
+      }
+    }
+    var x0 = Math.floor(N * 0.10), x1 = Math.ceil(N * 0.90);
+    var y0 = Math.floor(N * 0.10), y1 = Math.ceil(N * 0.85);
+    var mae = 0, mean = 0, cnt = 0;
+    for (var y2 = y0; y2 < y1; y2++) {
+      for (var x2 = x0; x2 < x1; x2++) {
+        var i = y2 * N + x2;
+        var mi = y2 * N + (x1 - 1 - (x2 - x0));
+        mae += Math.abs(buf[i] - buf[mi]);
+        mean += buf[i];
+        cnt++;
+      }
+    }
+    if (!cnt) return -1;
+    mean /= cnt;
+    var va = 0;
+    for (var y3 = y0; y3 < y1; y3++) {
+      for (var x3 = x0; x3 < x1; x3++) {
+        var d3 = buf[y3 * N + x3] - mean;
+        va += d3 * d3;
+      }
+    }
+    var std = Math.sqrt(va / cnt);
+    if (std < 1e-4) return -1;
+    return (mae / cnt) / std;
+  }
+
+  function blinkStats(eyeArr, durSec) {
+    var n = eyeArr.length;
+    if (n < 24 || !durSec || durSec < 2) return { perSec: -1, dips: 0 };
+    var med = median(eyeArr);
+    var dev = [];
+    for (var i = 0; i < n; i++) dev.push(Math.abs(eyeArr[i] - med));
+    var madE = 1.4826 * median(dev);
+    // слишком шумная серия (движение/смена освещения) — моргания не выделить
+    if (madE > 0.045) return { perSec: -1, dips: 0 };
+    var th = med - Math.max(2.2 * madE, 0.015);
+    var dips = 0, inDip = false;
+    for (var j = 0; j < n; j++) {
+      var isDip = eyeArr[j] < th;
+      if (isDip && !inDip) { dips++; inDip = true; }
+      else if (!isDip) inDip = false;
+    }
+    return { perSec: dips / durSec, dips: dips };
+  }
+
+  function analyzeFrame(img) {
+    var W = img.width, H = img.height, data = img.data;
+    var res = { faceFound: false };
+    res.thumb = cropResizeGray(data, W, H, 0, 0, W, H, THUMB_N);
+
+    var fb = skinDetectBox(data, W, H);
+    var bx, by, bw, bh;
+    if (fb) {
+      bx = fb.x; by = fb.y; bw = fb.w; bh = fb.h;
+      res.faceFound = true;
+      res.box = fb;
+    } else {
+      var s = Math.round(Math.min(W, H) * 0.42);
+      bx = (W - s) >> 1; by = (H - s) >> 1; bw = s; bh = s;
+      res.box = { x: bx, y: by, w: bw, h: bh };
+    }
+    res.faceBox = res.box;
+
+    var g128 = cropResizeGray(data, W, H, bx, by, bw, bh, FFT_N);
+    var pw = fft2dPower(g128, FFT_N);
+    res.peakF = spectralPeaks(pw, FFT_N);
+    var st = spectralHf(pw, FFT_N);
+    res.hfF = st.hfRatio;
+    res.specEnergy = st.energy;
+
+    var fr = extractRegionPlanes(data, W, H, bx, by, bw, bh, 200);
+    res.noiseF = gaussResidualMAD(fr.g, fr.w, fr.h);
+    res.lapVarF = laplacianVar(fr.g, fr.w, fr.h);
+    res.tileCVv = tileCV(fr.g, fr.w, fr.h, 5);
+    res.gradFace = meanAbsLap(fr.g, fr.w, fr.h);
+    var ly = lapAbsArr(fr.g, fr.w, fr.h);
+    var lcb = lapAbsArr(fr.cb, fr.w, fr.h);
+    var lcr = lapAbsArr(fr.cr, fr.w, fr.h);
+    res.corrF = (pearson(ly, lcb) + pearson(ly, lcr)) / 2;
+
+    // noise uniformity inside face: center vs edge band
+    var cx0 = Math.floor(fr.w * 0.25), cx1 = Math.ceil(fr.w * 0.75);
+    var cy0 = Math.floor(fr.h * 0.25), cy1 = Math.ceil(fr.h * 0.75);
+    var centerNoise = 0, edgeParts = [];
+    if (cx1 - cx0 > 8 && cy1 - cy0 > 8) {
+      var cg = new Float32Array((cy1 - cy0) * (cx1 - cx0));
+      for (var yy = 0; yy < cy1 - cy0; yy++) {
+        for (var xx = 0; xx < cx1 - cx0; xx++) {
+          cg[yy * (cx1 - cx0) + xx] = fr.g[(cy0 + yy) * fr.w + (cx0 + xx)];
+        }
+      }
+      centerNoise = gaussResidualMAD(cg, cx1 - cx0, cy1 - cy0);
+      var bands = [
+        [0, 0, fr.w, cy0], [0, cy1, fr.w, fr.h - cy1],
+        [0, cy0, cx0, cy1 - cy0], [cx1, cy0, fr.w - cx1, cy1 - cy0]
+      ];
+      for (var bi = 0; bi < 4; bi++) {
+        var bd = bands[bi];
+        if (bd[2] < 8 || bd[3] < 8) continue;
+        var eg = new Float32Array(bd[2] * bd[3]);
+        for (var ey = 0; ey < bd[3]; ey++) {
+          for (var ex = 0; ex < bd[2]; ex++) {
+            eg[ey * bd[2] + ex] = fr.g[(bd[1] + ey) * fr.w + (bd[0] + ex)];
+          }
+        }
+        var en = gaussResidualMAD(eg, bd[2], bd[3]);
+        if (en > 0) edgeParts.push(en);
+      }
+    }
+    var edgeNoise = edgeParts.length ? median(edgeParts) : 0;
+    res.noiseUniform = 0;
+    if (centerNoise > 0.002 && edgeNoise > 0.002) {
+      var ratio = edgeNoise / centerNoise;
+      if (ratio < 0.05) ratio = 0.05; if (ratio > 20) ratio = 20;
+      res.noiseUniform = Math.abs(Math.log(ratio));
+    }
+
+    // border strips (assumed authentic reference)
+    var th = Math.max(10, Math.min(40, Math.round(Math.min(W, H) * 0.07)));
+    var strips = [
+      [0, 0, W, th], [0, H - th, W, th],
+      [0, 0, th, H], [W - th, 0, th, H]
+    ];
+    var nB = [], cB = [];
+    for (var si = 0; si < 4; si++) {
+      var s4 = strips[si];
+      var rp = extractRegionPlanes(data, W, H, s4[0], s4[1], s4[2], s4[3], 260);
+      var nz = gaussResidualMAD(rp.g, rp.w, rp.h);
+      if (nz > 0.004) nB.push(nz);
+      var ly2 = lapAbsArr(rp.g, rp.w, rp.h);
+      var lcb2 = lapAbsArr(rp.cb, rp.w, rp.h);
+      var lcr2 = lapAbsArr(rp.cr, rp.w, rp.h);
+      cB.push((pearson(ly2, lcb2) + pearson(ly2, lcr2)) / 2);
+    }
+    res.noiseB = nB.length ? median(nB) : 0;
+    res.corrB = median(cB);
+
+    // border patches for spectral self-calibration
+    var side = Math.max(48, Math.min(140, Math.round(Math.min(W, H) * 0.18)));
+    var mrg = Math.max(2, Math.round(Math.min(W, H) * 0.03));
+    var pts = [
+      [mrg, mrg], [W - mrg - side, mrg],
+      [mrg, H - mrg - side], [W - mrg - side, H - mrg - side]
+    ];
+    if (W > H * 1.9) {
+      pts.push([(W - side) >> 1, mrg], [(W - side) >> 1, H - mrg - side]);
+    }
+    if (H > W * 1.9) {
+      pts.push([mrg, (H - side) >> 1], [W - mrg - side, (H - side) >> 1]);
+    }
+    var aB = [], hB = [];
+    for (var pi = 0; pi < pts.length; pi++) {
+      var p = pts[pi];
+      if (p[0] < 0 || p[1] < 0 || p[0] + side > W || p[1] + side > H) continue;
+      var gg = cropResizeGray(data, W, H, p[0], p[1], side, side, 64);
+      var lv = laplacianVar(gg, 64, 64);
+      if (lv < 2e-4) continue;
+      var pw2 = fft2dPower(gg, 64);
+      var pk = spectralPeaks(pw2, 64);
+      var st2 = spectralHf(pw2, 64);
+      if (st2.energy < 1e-9) continue;
+      aB.push(pk);
+      hB.push(st2.hfRatio);
+    }
+    res.peakB = aB.length ? median(aB) : 0.3;
+    res.hfB = hB.length ? median(hB) : 0.55;
+
+    // --- v3 additions ---
+    res.chromaF = chromaThumb(fr.cb, fr.cr, fr.w, fr.h);
+    res.chromaB = chromaThumbTop(data, W, H);
+    res.eye = res.faceFound ? eyeBandMean(fr.g, fr.w, fr.h) : -1;
+    res.sym = res.faceFound ? symmetryRatio(fr.g, fr.w, fr.h) : -1;
+
+    return res;
+  }
+
+  function aggregate(frames, timing) {
+    var peakF = [], hfF = [], noiseF = [], lapVarF = [], tileC = [], corrF = [], gradF = [], noiseU = [];
+    var aB = [], hB = [], nB = [], cB = [];
+    var faceCount = 0;
+
+    for (var i = 0; i < frames.length; i++) {
+      var f = frames[i];
+      aB.push(f.peakB); hB.push(f.hfB);
+      if (f.noiseB > 0.004) nB.push(f.noiseB);
+      cB.push(f.corrB);
+      if (f.faceFound) faceCount++;
+      peakF.push(f.peakF); hfF.push(f.hfF); noiseF.push(f.noiseF);
+      lapVarF.push(f.lapVarF); tileC.push(f.tileCVv); corrF.push(f.corrF);
+      gradF.push(f.gradFace); noiseU.push(f.noiseUniform);
+    }
+
+    var mPeakF = median(peakF), mHfF = median(hfF), mNoiseF = median(noiseF);
+    var mTile = median(tileC), mCorrF = median(corrF);
+    var mPeakB = median(aB), mHfB = median(hB), mNoiseB = nB.length ? median(nB) : 0;
+    var mCorrB = median(cB);
+    var mNoiseU = median(noiseU);
+    var faceFound = faceCount >= Math.max(3, frames.length * 0.4);
+
+    // scene cut detection by thumbnails
+    var diffs = [], cut = [];
+    for (var i2 = 1; i2 < frames.length; i2++) {
+      var t1 = frames[i2].thumb, t0 = frames[i2 - 1].thumb;
+      var d = 0;
+      for (var k = 0; k < t1.length; k++) d += Math.abs(t1[k] - t0[k]);
+      d /= t1.length;
+      diffs.push(d); cut.push(false);
+    }
+    var medD = median(diffs);
+    for (var i3 = 0; i3 < diffs.length; i3++) {
+      if (diffs[i3] > Math.max(3.2 * medD, 0.10)) cut[i3] = true;
+    }
+    var sceneId = [0];
+    for (var i4 = 0; i4 < cut.length; i4++) sceneId.push(sceneId[i4] + (cut[i4] ? 1 : 0));
+    var sceneCount = sceneId[sceneId.length - 1] + 1;
+
+    var noiseT = [], hfT = [];
+    for (var i5 = 0; i5 < frames.length; i5++) {
+      noiseT.push(frames[i5].noiseF);
+      hfT.push(frames[i5].lapVarF);
+    }
+
+    function sceneAdjustedCV(arr) {
+      var byScene = {};
+      for (var i = 0; i < arr.length; i++) {
+        var s = sceneId[i];
+        if (!byScene[s]) byScene[s] = [];
+        byScene[s].push(arr[i]);
+      }
+      var meds = {};
+      for (var s2 in byScene) {
+        if (byScene[s2].length >= 2) meds[s2] = median(byScene[s2]);
+      }
+      var gMed = median(arr);
+      var dev = [];
+      for (var j = 0; j < arr.length; j++) {
+        var m2 = meds[sceneId[j]];
+        if (m2 === undefined) m2 = gMed;
+        dev.push(Math.abs(arr[j] - m2));
+      }
+      return median(dev) / (Math.abs(gMed) + 1e-6);
+    }
+
+    var cvNoise = sceneAdjustedCV(noiseT);
+    var cvHF = sceneAdjustedCV(hfT);
+
+    var vdiffs = [];
+    for (var i6 = 0; i6 < diffs.length; i6++) if (!cut[i6]) vdiffs.push(diffs[i6]);
+    var dupFrac = 0;
+    if (vdiffs.length >= 4) {
+      var medV = median(vdiffs);
+      if (medV > 0.02) {
+        var cnt = 0;
+        for (var i7 = 0; i7 < vdiffs.length; i7++) if (vdiffs[i7] < 0.25 * medV) cnt++;
+        dupFrac = cnt / vdiffs.length;
+      }
+    }
+
+    // feature mapping to [0..1], higher = more fake-like
+    var x1 = 0.70 * clip01(((mPeakF - mPeakB) - 0.25) / 0.30) + 0.30 * clip01((mPeakF - 0.55) / 0.35);
+    var x2 = mHfB > 1e-4 ? clip01((1 - mHfF / mHfB) / 1.1) : 0;
+    var x3 = mNoiseB > 0.004 ? clip01((0.82 - mNoiseF / mNoiseB) / 0.65) : 0;
+    var x4 = clip01(((mCorrB - mCorrF) + 0.03) / 0.42);
+    var x5 = clip01((mNoiseU - 0.55) / 0.60);
+    var x6 = clip01((cvNoise - 0.20) / 0.38);
+    var x7 = clip01((cvHF - 0.32) / 0.50);
+    var x8 = clip01((0.45 - mTile) / 0.45);
+    var x9 = clip01(dupFrac / 0.45);
+
+    // x10: хрома-дрожь лица относительно фона (стерильность цвета лица)
+    var fd = [], bd = [];
+    for (var i8 = 1; i8 < frames.length; i8++) {
+      if (cut[i8 - 1]) continue;
+      var dF = chromaDelta(frames[i8].chromaF, frames[i8 - 1].chromaF);
+      var dB = chromaDelta(frames[i8].chromaB, frames[i8 - 1].chromaB);
+      if (dF >= 0 && dB > 1e-5) { fd.push(dF); bd.push(dB); }
+    }
+    var chromaRatio = 1;
+    var x10 = 0.15;
+    if (fd.length >= 6) {
+      var mFd = median(fd), mBd = median(bd);
+      if (mBd > 1e-5) {
+        chromaRatio = mFd / mBd;
+        if (chromaRatio < 0.05) chromaRatio = 0.05;
+        if (chromaRatio > 20) chromaRatio = 20;
+        x10 = clip01((0.85 - chromaRatio) / 0.85);
+      }
+    }
+
+    // x11: дефицит морганий (только при плотной выборке кадров)
+    var eyeArr = [];
+    for (var i9 = 0; i9 < frames.length; i9++) {
+      if (frames[i9].faceFound && frames[i9].eye >= 0) eyeArr.push(frames[i9].eye);
+    }
+    var blink = { perSec: -1, dips: 0 };
+    var x11 = 0.2;
+    var timingStep = timing && timing.step ? timing.step : 0;
+    if (faceFound && eyeArr.length >= 24 && timingStep > 0 && timingStep < 0.2) {
+      blink = blinkStats(eyeArr, timing.dur);
+      if (blink.perSec >= 0) x11 = clip01((0.22 - blink.perSec) / 0.22);
+    }
+
+    // x12: избыточная симметрия лица
+    var syms = [];
+    for (var ia = 0; ia < frames.length; ia++) {
+      if (frames[ia].faceFound && frames[ia].sym >= 0) syms.push(frames[ia].sym);
+    }
+    var mSym = syms.length >= 6 ? median(syms) : -1;
+    var x12 = mSym >= 0 ? clip01((0.30 - mSym) / 0.30) : 0.15;
+
+    // per-frame suspicion chart
+    var mPeakB2 = Math.max(mPeakB, 0.2);
+    var chart = [];
+    for (var ic = 0; ic < frames.length; ic++) {
+      var fc = frames[ic];
+      var sc = 0.30 * clip01((0.82 - fc.noiseF / Math.max(mNoiseB, 0.004)) / 0.65)
+             + 0.30 * clip01((1 - fc.hfF / Math.max(mHfB, 1e-4)) / 1.1)
+             + 0.25 * clip01((fc.peakF - mPeakB2) / 0.45)
+             + 0.15 * clip01((fc.noiseUniform - 0.3) / 0.7);
+      chart.push(sc);
+    }
+
+    return {
+      x: [x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12],
+      faceFound: faceFound,
+      sceneCount: sceneCount,
+      frames: frames.length,
+      chart: chart,
+      blink: blink,
+      raw: {
+        peakF: mPeakF, peakB: mPeakB, hfF: mHfF, hfB: mHfB,
+        noiseF: mNoiseF, noiseB: mNoiseB, corrF: mCorrF, corrB: mCorrB,
+        noiseU: mNoiseU, cvNoise: cvNoise, cvHF: cvHF, tile: mTile, dup: dupFrac,
+        chromaRatio: chromaRatio, blinkPerSec: blink.perSec, sym: mSym
+      }
+    };
+  }
+
+  var PRIOR = { b: -2.6, w: [2.2, 1.2, 2.0, 1.6, 1.2, 1.3, 1.6, 1.2, 0.9, 1.1, 0.9, 0.8] };
+
+  function sigmoid(z) {
+    if (z > 30) z = 30;
+    if (z < -30) z = -30;
+    return 1 / (1 + Math.exp(-z));
+  }
+
+  function predictWith(b, w, x) {
+    var z = b;
+    for (var i = 0; i < x.length; i++) z += w[i] * x[i];
+    return sigmoid(z);
+  }
+
+  function trainFrom(prior, startB, startW, samples) {
+    if (!samples || !samples.length) return { b: prior.b, w: prior.w.slice() };
+    var b = startB, w = startW.slice();
+    var NF = w.length;
+    var N = samples.length;
+    var iters = 320, lr0 = 0.20, lam = 0.35;
+    for (var it = 0; it < iters; it++) {
+      var lr = lr0 * (1 - it / iters) + 0.015;
+      var gb = 0;
+      var gw = new Float64Array(NF);
+      for (var s = 0; s < N; s++) {
+        var sm = samples[s];
+        var p = predictWith(b, w, sm.x);
+        var e = (p - sm.y) * sm.w;
+        gb += e;
+        for (var i2 = 0; i2 < NF; i2++) gw[i2] += e * sm.x[i2];
+      }
+      gb = gb / N + 2 * lam * (b - prior.b);
+      b -= lr * gb;
+      for (var i3 = 0; i3 < NF; i3++) {
+        w[i3] -= lr * (gw[i3] / N + 2 * lam * (w[i3] - prior.w[i3]));
+      }
+    }
+    return { b: b, w: w };
+  }
+  /*__PURE_END__*/
+
+  var FEATURE_LABELS = [
+    'Спектральные пики GAN',
+    'Потеря детализации лица',
+    'Стерильность шума',
+    'Цветовая рассинхронизация',
+    'Неоднородность шума лица',
+    'Нестабильность шума',
+    'Мерцание детализации',
+    'Однородность текстуры',
+    'Дубли кадров',
+    'Стерильность цвета лица',
+    'Отсутствие морганий',
+    'Избыточная симметрия лица'
+  ];
+  var FEATURE_HINTS = [
+    'Периодические пики в спектре лица относительно фона — след генератора GAN',
+    'Высокие частоты лица слабее, чем у окружающего фона — лицо пересглажено',
+    'Шум на лице заметно ниже, чем на остальном кадре — синтетическая чистота',
+    'Цветовые детали лица не согласованы с яркостными (и с фоном)',
+    'Шум в центре лица и по краям сильно отличается — след blending при замене лица',
+    'Шум лица нестабилен от кадра к кадру — генератор «дрожит»',
+    'Количество детализации скачет от кадра к кадру',
+    'Текстура лица равномернее, чем у реальной кожи',
+    'Много повторяющихся кадров — типично для видео, сгенерированных с низкой частотой кадров',
+    'Цвет лица «заморожен» от кадра к кадру, тогда как фон живой — след генерации',
+    'Глаза не моргают или моргают слишком редко — классический признак дипфейка',
+    'Левая и правая половины лица слишком похожи — настоящие лица всегда асимметричны'
+  ];
+
+  var STORE_KEY = 'deepguard_v3_model';
+  var PHOTO_STORE_KEY = 'deepguard_photo_model';
+
+  var PHOTO_PRIOR = { b: -3.7, w: [2.0, 1.3, 1.9, 1.2, 1.3, 1.4, 1.0, 1.2, 1.2, 1.0, 1.3, 4.0] };
+
+  var PHOTO_FEATURE_LABELS = [
+    'Спектральные пики GAN',
+    'Потеря детализации',
+    'Стерильность шума',
+    'Цветовая рассинхронизация',
+    'Неоднородность шума',
+    'Однородность текстуры',
+    'Избыточная симметрия лица',
+    'Слишком ровная сцена',
+    'Стерильная цветность',
+    'Перенасыщенность цвета',
+    'Ровная ELA-карта',
+    'Решётка апскейлера'
+  ];
+  var PHOTO_FEATURE_HINTS = [
+    'Периодические пики в спектре относительно опорных зон — след сетчатых артефактов генератора',
+    'Высокие частоты в центральной области слабее, чем в опорных зонах — пересглаживание',
+    'Шум в центральной области заметно ниже, чем в остальной сцене — синтетическая чистота',
+    'Цветовые детали не согласованы с яркостными',
+    'Шум в центре и по краям области сильно отличается — след blending при монтаже',
+    'Текстура равномернее, чем у реальных фотографий',
+    'Левая и правая половины лица слишком похожи — генераторы делают лица симметричными',
+    'Текстура всей сцены неестественно однородная — типично для диффузионных моделей',
+    'Шум в цветовых каналах слабее, чем в яркостном — генераторы рисуют «чистый» цвет',
+    'Неестественно насыщенные цвета — частый признак нейрогенерации',
+    'Ошибка сжатия (ELA) распределена слишком равномерно — нет следов реальной съёмки',
+    'Периодичность остаточного шума — след решётки апскейлинга нейросети (checkerboard-артефакты)'
+  ];
+
+  var dropZone = document.getElementById('dropZone');
+  var fileInput = document.getElementById('fileInput');
+  var fileInfo = document.getElementById('fileInfo');
+  var fileNameEl = document.getElementById('fileName');
+  var fileSizeEl = document.getElementById('fileSize');
+  var preview = document.getElementById('preview');
+  var analyzeBtn = document.getElementById('analyzeBtn');
+  var progressContainer = document.getElementById('progressContainer');
+  var progressFill = document.getElementById('progressFill');
+  var progressText = document.getElementById('progressText');
+  var resultBox = document.getElementById('result');
+  var errorBox = document.getElementById('errorBox');
+  var resetBtn = document.getElementById('resetBtn');
+  var fbPredWord = document.getElementById('fbPredWord');
+  var fbYes = document.getElementById('fbYes');
+  var fbNo = document.getElementById('fbNo');
+  var fbMain = document.getElementById('fbMain');
+  var fbCorrect = document.getElementById('fbCorrect');
+  var fbFixReal = document.getElementById('fbFixReal');
+  var fbFixFake = document.getElementById('fbFixFake');
+  var fbComment = document.getElementById('fbComment');
+  var teachStatus = document.getElementById('teachStatus');
+  var mpStats = document.getElementById('mpStats');
+  var mpJournal = document.getElementById('mpJournal');
+  var mpReset = document.getElementById('mpReset');
+  var modelPanel = document.getElementById('modelPanel');
+  var memToggle = document.getElementById('memToggle');
+  var mpTabVideo = document.getElementById('mpTabVideo');
+  var mpTabPhoto = document.getElementById('mpTabPhoto');
+  var mpView = 'video';
+  var mpExport = document.getElementById('mpExport');
+  var mpImport = document.getElementById('mpImport');
+  var mpImportFile = document.getElementById('mpImportFile');
+  var mpStatus = document.getElementById('mpStatus');
+  var videoUrlInput = document.getElementById('videoUrl');
+  var loadUrlBtn = document.getElementById('loadUrlBtn');
+  var chartBox = document.getElementById('chartBox');
+  var chartCanvas = document.getElementById('chartCanvas');
+  var chartCaption = document.getElementById('chartCaption');
+  var modeRadios = document.getElementsByName('mode');
+  var modeCardFast = document.getElementById('modeCardFast');
+  var modeCardSlow = document.getElementById('modeCardSlow');
+
+  var tabVideo = document.getElementById('tabVideo');
+  var tabPhoto = document.getElementById('tabPhoto');
+  var videoApp = document.getElementById('videoApp');
+  var photoApp = document.getElementById('photoApp');
+
+  var pDropZone = document.getElementById('pDropZone');
+  var pFileInput = document.getElementById('pFileInput');
+  var pFileInfo = document.getElementById('pFileInfo');
+  var pFileNameEl = document.getElementById('pFileName');
+  var pFileSizeEl = document.getElementById('pFileSize');
+  var pPreview = document.getElementById('pPreview');
+  var pAnalyzeBtn = document.getElementById('pAnalyzeBtn');
+  var pProgressContainer = document.getElementById('pProgressContainer');
+  var pProgressFill = document.getElementById('pProgressFill');
+  var pProgressText = document.getElementById('pProgressText');
+  var pResultBox = document.getElementById('pResult');
+  var pErrorBox = document.getElementById('pErrorBox');
+  var pResetBtn = document.getElementById('pResetBtn');
+  var pFbPredWord = document.getElementById('pFbPredWord');
+  var pFbYes = document.getElementById('pFbYes');
+  var pFbNo = document.getElementById('pFbNo');
+  var pFbMain = document.getElementById('pFbMain');
+  var pFbCorrect = document.getElementById('pFbCorrect');
+  var pFbFixReal = document.getElementById('pFbFixReal');
+  var pFbFixFake = document.getElementById('pFbFixFake');
+  var pFbComment = document.getElementById('pFbComment');
+  var pTeachStatus = document.getElementById('pTeachStatus');
+  var pChartBox = document.getElementById('pChartBox');
+  var pChartCanvas = document.getElementById('pChartCanvas');
+  var pChartCaption = document.getElementById('pChartCaption');
+
+  var videoModel = loadState(STORE_KEY, PRIOR, 'video');
+  var photoModel = loadState(PHOTO_STORE_KEY, PHOTO_PRIOR, 'photo');
+
+  var currentFile = null;
+  var lastUrl = null;
+  var photoFile = null;
+  var photoUrl = null;
+  var activeTab = 'video';
+
+  var videoCtx = { x: null, p: 0, id: null, name: '', kind: 'video', model: videoModel, ui: {
+    predWord: fbPredWord, yes: fbYes, no: fbNo, main: fbMain, correct: fbCorrect,
+    fixReal: fbFixReal, fixFake: fbFixFake, comment: fbComment, status: teachStatus
+  } };
+  var photoCtx = { x: null, p: 0, id: null, name: '', kind: 'photo', model: photoModel, ui: {
+    predWord: pFbPredWord, yes: pFbYes, no: pFbNo, main: pFbMain, correct: pFbCorrect,
+    fixReal: pFbFixReal, fixFake: pFbFixFake, comment: pFbComment, status: pTeachStatus
+  } };
+
+  function getMode() {
+    for (var i = 0; i < modeRadios.length; i++) {
+      if (modeRadios[i].checked) return modeRadios[i].value;
+    }
+    return 'slow';
+  }
+
+  function refreshModeCards() {
+    modeCardFast.classList.toggle('selected', getMode() === 'fast');
+    modeCardSlow.classList.toggle('selected', getMode() === 'slow');
+  }
+  for (var mr = 0; mr < modeRadios.length; mr++) {
+    modeRadios[mr].addEventListener('change', refreshModeCards);
+  }
+  refreshModeCards();
+
+  function loadState(key, prior, kind) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && o.w && o.w.length === prior.w.length && typeof o.b === 'number' && o.samples && o.history) {
+          o.kind = kind;
+          return o;
+        }
+      }
+    } catch (e) { /* localStorage недоступен — обучение только в памяти */ }
+    return { b: prior.b, w: prior.w.slice(), version: 1, samples: [], history: [], kind: kind };
+  }
+
+  function priorFor(m) {
+    return m.kind === 'photo' ? PHOTO_PRIOR : PRIOR;
+  }
+  function keyFor(m) {
+    return m.kind === 'photo' ? PHOTO_STORE_KEY : STORE_KEY;
+  }
+
+  function saveState(m, key) {
+    try { localStorage.setItem(key, JSON.stringify(m)); } catch (e) { /* ignore */ }
+  }
+
+  function feedbackStats(m) {
+    var ok = 0, fix = 0;
+    for (var i = 0; i < m.history.length; i++) {
+      if (m.history[i].fb === 'ok') ok++;
+      else if (m.history[i].fb === 'fix') fix++;
+    }
+    return { ok: ok, fix: fix, total: ok + fix };
+  }
+
+  function addSample(m, x, y, wgt, vidId, src) {
+    m.samples.push({ x: x.slice(), y: y, w: wgt, t: Date.now(), vid: vidId, src: src });
+    if (m.samples.length > 400) m.samples.shift();
+    var trained = trainFrom(priorFor(m), m.b, m.w, m.samples);
+    m.b = trained.b;
+    m.w = trained.w;
+    m.version = (m.version || 1) + 1;
+    saveState(m, keyFor(m));
+  }
+
+  function pushHistory(m, entry) {
+    m.history.push(entry);
+    if (m.history.length > 40) m.history.shift();
+    saveState(m, keyFor(m));
+  }
+
+  function fmtTime(t) {
+    var d = new Date(t);
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+
+  function verdictRu(p) {
+    return p >= 0.60 ? 'дипфейк' : (p >= 0.40 ? 'сомнительно' : 'настоящее');
+  }
+
+  function refreshModelPanel() {
+    if (modelPanel.style.display === 'none') return; // панель скрыта — не пересчитываем
+    var isPhoto = mpView === 'photo';
+    var m = isPhoto ? photoModel : videoModel;
+    var fs = feedbackStats(m);
+    var acc = fs.total ? Math.round(fs.ok / fs.total * 100) : null;
+    var html =
+      (isPhoto ? 'Фото изучено: ' : 'Видео изучено: ') + '<b>' + m.samples.length + '</b>' +
+      ' · ваших отзывов: <b>' + fs.total + '</b>' +
+      (acc !== null ? ' (верных прогнозов: <b>' + acc + '%</b>)' : '') +
+      ' · версия модели: <b>v' + (m.version || 1) + '</b><br>' +
+      (isPhoto
+        ? 'Модель фото: логистическая регрессия над 12 форензическими признаками изображения — спектр, шум, цвет, ELA, решётка апскейлера, симметрия лица.'
+        : 'Модель видео: логистическая регрессия над 12 форензическими признаками всего видео — спектр, шум, лицо, моргания, стабильность.') +
+      '<br>Каждая проверка автоматически становится примером, ваш отзыв «верно / неверно» исправляет веса.';
+    mpStats.innerHTML = html;
+
+    var jh = '';
+    var start = Math.max(0, m.history.length - 8);
+    for (var i = m.history.length - 1; i >= start; i--) {
+      var h = m.history[i];
+      var cls = h.fb === 'ok' ? 'ok' : (h.fb === 'fix' ? 'fix' : 'auto');
+      var outcome;
+      if (h.fb === 'auto') outcome = 'авто-пример';
+      else if (h.fb === 'ok') outcome = 'вы подтвердили: <b>верно</b>';
+      else outcome = 'вы исправили на <b>' + (h.correct === 1 ? 'дипфейк/генерацию' : 'настоящее') + '</b>';
+      var nm = (h.kind === 'photo' ? '🖼 ' : '') + (h.name || (h.kind === 'photo' ? 'фото' : 'видео'));
+      if (nm.length > 24) nm = nm.slice(0, 22) + '…';
+      jh += '<div class="jr ' + cls + '">' + fmtTime(h.t) + ' · ' + nm +
+        ' — прогноз: <b>' + verdictRu(h.p) + ' ' + Math.round(h.p * 100) + '%</b> → ' + outcome + '</div>';
+    }
+    mpJournal.innerHTML = jh;
+  }
+
+  function setMpView(v) {
+    mpView = v;
+    mpTabVideo.classList.toggle('selected', v === 'video');
+    mpTabPhoto.classList.toggle('selected', v === 'photo');
+    refreshModelPanel();
+  }
+  mpTabVideo.addEventListener('click', function () { setMpView('video'); });
+  mpTabPhoto.addEventListener('click', function () { setMpView('photo'); });
+
+  memToggle.addEventListener('click', function () {
+    var show = modelPanel.style.display === 'none';
+    modelPanel.style.display = show ? '' : 'none';
+    memToggle.textContent = show ? '🧠 Память нейросети — скрыть' : '🧠 Память нейросети — показать';
+    if (show) refreshModelPanel();
+  });
+
+  dropZone.addEventListener('click', function () { fileInput.click(); });
+  dropZone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', function () {
+    dropZone.classList.remove('dragover');
+  });
+  dropZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+  fileInput.addEventListener('change', function (e) {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  });
+  videoUrlInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); loadFromUrl(); }
+  });
+  loadUrlBtn.addEventListener('click', loadFromUrl);
+  analyzeBtn.addEventListener('click', runAnalysis);
+  resetBtn.addEventListener('click', resetApp);
+  mpReset.addEventListener('click', function () {
+    if (!window.confirm) return;
+    if (mpView === 'photo') {
+      if (confirm('Сбросить обучение модели ФОТО? База примеров и журнал фото будут удалены.')) {
+        photoModel = { b: PHOTO_PRIOR.b, w: PHOTO_PRIOR.w.slice(), version: 1, samples: [], history: [], kind: 'photo' };
+        saveState(photoModel, PHOTO_STORE_KEY);
+        photoCtx.model = photoModel;
+        refreshModelPanel();
+        teachStatus.textContent = 'Обучение фото-модели сброшено.';
+        pTeachStatus.textContent = 'Обучение фото-модели сброшено. Она вернулась к заводским весам.';
+      }
+    } else {
+      if (confirm('Сбросить обучение модели ВИДЕО? База примеров и журнал видео будут удалены.')) {
+        videoModel = { b: PRIOR.b, w: PRIOR.w.slice(), version: 1, samples: [], history: [], kind: 'video' };
+        saveState(videoModel, STORE_KEY);
+        videoCtx.model = videoModel;
+        refreshModelPanel();
+        teachStatus.textContent = 'Обучение видео-модели сброшено. Она вернулась к заводским весам.';
+        pTeachStatus.textContent = 'Обучение видео-модели сброшено.';
+      }
+    }
+    setMpStatus('');
+  });
+
+  /* ===== Скачивание и загрузка памяти нейросети ===== */
+
+  mpExport.addEventListener('click', exportMemory);
+  mpImport.addEventListener('click', function () { mpImportFile.click(); });
+  mpImportFile.addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) importMemoryFile(f);
+  });
+
+  function setMpStatus(text, isErr) {
+    mpStatus.textContent = text || '';
+    mpStatus.className = 'mp-status' + (isErr ? ' err' : '');
+  }
+
+  function modelToJSON(m) {
+    var out = {
+      b: m.b,
+      version: m.version || 1,
+      w: Array.prototype.slice.call(m.w),
+      samples: [],
+      history: m.history.slice()
+    };
+    for (var i = 0; i < m.samples.length; i++) {
+      var s = m.samples[i];
+      out.samples.push({
+        x: Array.prototype.slice.call(s.x),
+        y: s.y, w: s.w, t: s.t, vid: s.vid, src: s.src
+      });
+    }
+    return out;
+  }
+
+  function exportMemory() {
+    try {
+      var payload = {
+        app: 'DeepGuard',
+        kind: 'deepguard_memory',
+        format: 2,
+        exported: new Date().toISOString(),
+        video: modelToJSON(videoModel),
+        photo: modelToJSON(photoModel)
+      };
+      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var d = new Date();
+      var stamp = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      a.href = url;
+      a.download = 'deepguard_memory_' + stamp + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      setMpStatus('Готово: скачан файл «' + a.download + '» — видео: ' + videoModel.samples.length +
+        ' примеров, фото: ' + photoModel.samples.length + '. На другом устройстве нажмите «📂 Загрузить память» и выберите этот файл.');
+    } catch (e2) {
+      setMpStatus('Не получилось скачать память: ' + (e2 && e2.message ? e2.message : 'ошибка'), true);
+    }
+  }
+
+  function normalizeModel(raw, NF) {
+    if (!raw || typeof raw.b !== 'number' || !raw.w || raw.w.length !== NF ||
+        !raw.samples || !raw.history) return null;
+    var b = Number(raw.b);
+    if (!isFinite(b)) return null;
+    var w = [];
+    for (var i = 0; i < NF; i++) {
+      var wi = Number(raw.w[i]);
+      if (!isFinite(wi)) return null;
+      w.push(wi);
+    }
+    var samples = [];
+    for (var j = 0; j < raw.samples.length; j++) {
+      var s = raw.samples[j];
+      if (!s || !s.x || s.x.length !== NF) continue;
+      var x = [], okx = true;
+      for (var k = 0; k < NF; k++) {
+        var xv = Number(s.x[k]);
+        if (!isFinite(xv)) { okx = false; break; }
+        x.push(xv);
+      }
+      if (!okx) continue;
+      samples.push({
+        x: x, y: s.y ? 1 : 0,
+        w: typeof s.w === 'number' && isFinite(s.w) && s.w > 0 ? s.w : 1,
+        t: s.t || 0, vid: s.vid || null, src: s.src || 'imp'
+      });
+    }
+    var history = [];
+    for (var h = 0; h < raw.history.length; h++) {
+      var hh = raw.history[h];
+      if (!hh || typeof hh.p !== 'number' || !isFinite(hh.p)) continue;
+      history.push({
+        t: hh.t || 0,
+        name: String(hh.name || '').slice(0, 60),
+        p: hh.p,
+        fb: (hh.fb === 'ok' || hh.fb === 'fix') ? hh.fb : 'auto',
+        correct: hh.correct ? 1 : 0,
+        comment: String(hh.comment || '').slice(0, 200),
+        kind: hh.kind === 'photo' ? 'photo' : 'video'
+      });
+    }
+    var ver = Number(raw.version);
+    return { b: b, w: w, version: isFinite(ver) && ver > 0 ? Math.floor(ver) : 1, samples: samples, history: history };
+  }
+
+  function normalizeImport(data) {
+    var out = {};
+    var gotAny = false;
+    if (data && data.video) {
+      out.video = normalizeModel(data.video, PRIOR.w.length);
+      gotAny = gotAny || !!out.video;
+    }
+    if (data && data.photo) {
+      out.photo = normalizeModel(data.photo, PHOTO_PRIOR.w.length);
+      gotAny = gotAny || !!out.photo;
+    }
+    if (!gotAny && data && (data.kind === 'deepguard_memory' || data.model || data.w)) {
+      // старый формат: одна общая модель видео
+      out.video = normalizeModel(data.model || data, PRIOR.w.length);
+      gotAny = !!out.video;
+    }
+    return gotAny ? out : null;
+  }
+
+  function mergeModels(cur, imp, prior, kind) {
+    var seen = {}, merged = [];
+    var addS = function (s) {
+      var key = (s.vid || '') + '|' + (s.src || '') + '|' + s.t + '|' + s.y;
+      if (seen[key]) return;
+      seen[key] = 1;
+      merged.push(s);
+    };
+    for (var i = 0; i < cur.samples.length; i++) addS(cur.samples[i]);
+    for (var j = 0; j < imp.samples.length; j++) addS(imp.samples[j]);
+    while (merged.length > 400) merged.shift();
+    var hseen = {}, hmerged = [];
+    var addH = function (h) {
+      var hk = h.t + '|' + (h.name || '') + '|' + (h.kind || '');
+      if (hseen[hk]) return;
+      hseen[hk] = 1;
+      hmerged.push(h);
+    };
+    for (var k = 0; k < cur.history.length; k++) addH(cur.history[k]);
+    for (var q = 0; q < imp.history.length; q++) addH(imp.history[q]);
+    while (hmerged.length > 40) hmerged.shift();
+    var trained = trainFrom(prior, prior.b, prior.w, merged);
+    return { b: trained.b, w: trained.w, version: Math.max(cur.version || 1, imp.version) + 1, samples: merged, history: hmerged, kind: kind };
+  }
+
+  function applyOne(cur, imp, prior, kind, merge) {
+    if (merge && (cur.samples.length || cur.history.length)) {
+      return mergeModels(cur, imp, prior, kind);
+    }
+    imp.kind = kind;
+    return imp;
+  }
+
+  function applyImported(res, merge) {
+    if (res.video) {
+      videoModel = applyOne(videoModel, res.video, PRIOR, 'video', merge);
+      videoCtx.model = videoModel;
+      saveState(videoModel, STORE_KEY);
+    }
+    if (res.photo) {
+      photoModel = applyOne(photoModel, res.photo, PHOTO_PRIOR, 'photo', merge);
+      photoCtx.model = photoModel;
+      saveState(photoModel, PHOTO_STORE_KEY);
+    }
+    var parts = [];
+    if (res.video) parts.push('видео: ' + videoModel.samples.length + ' примеров, v' + videoModel.version);
+    if (res.photo) parts.push('фото: ' + photoModel.samples.length + ' примеров, v' + photoModel.version);
+    setMpStatus((merge ? 'Память объединена (' : 'Память загружена из файла (') + parts.join('; ') + ').');
+    if (videoCtx.x) {
+      var pv = predictWith(videoModel.b, videoModel.w, videoCtx.x);
+      setMpStatus(mpStatus.textContent + ' Текущее видео по новой памяти: ' + verdictRu(pv) + ' ' + Math.round(pv * 100) + '%.');
+    }
+    if (photoCtx.x) {
+      var pp = predictWith(photoModel.b, photoModel.w, photoCtx.x);
+      setMpStatus(mpStatus.textContent + ' Текущее фото: ' + verdictRu(pp) + ' ' + Math.round(pp * 100) + '%.');
+    }
+    refreshModelPanel();
+  }
+
+  function importMemoryFile(f) {
+    var reader = new FileReader();
+    reader.onerror = function () { setMpStatus('Не удалось прочитать файл памяти', true); };
+    reader.onload = function () {
+      var res;
+      try {
+        res = normalizeImport(JSON.parse(String(reader.result)));
+      } catch (e3) {
+        setMpStatus('Файл повреждён или это не JSON — память не загружена', true);
+        return;
+      }
+      if (!res) {
+        setMpStatus('Это не память DeepGuard: в файле нет весов модели и базы примеров', true);
+        return;
+      }
+      var anyCur = videoModel.samples.length || videoModel.history.length ||
+                   photoModel.samples.length || photoModel.history.length;
+      var merge = false;
+      if (anyCur && window.confirm) {
+        var what = [];
+        if (res.video) what.push('видео: ' + res.video.samples.length + ' (v' + res.video.version + ')');
+        if (res.photo) what.push('фото: ' + res.photo.samples.length + ' (v' + res.photo.version + ')');
+        merge = confirm('В файле память: ' + what.join(', ') + '.\n\n' +
+          'ОК — ОБЪЕДИНИТЬ с текущей памятью этого устройства (веса пересчитаются заново).\n' +
+          'Отмена — ЗАМЕНИТЬ текущую память содержимым файла.');
+      }
+      applyImported(res, merge);
+    };
+    reader.readAsText(f);
+  }
+
+  fbYes.addEventListener('click', function () { doFeedbackConfirm(videoCtx); });
+  fbNo.addEventListener('click', function () { openCorrectBranch(videoCtx); });
+  fbFixReal.addEventListener('click', function () { doFeedbackCorrect(videoCtx, 0); });
+  fbFixFake.addEventListener('click', function () { doFeedbackCorrect(videoCtx, 1); });
+
+  function openCorrectBranch(c) {
+    c.ui.correct.style.display = 'block';
+    c.ui.main.style.display = 'none';
+    c.ui.status.textContent = '';
+  }
+
+  function doFeedbackConfirm(c) {
+    if (!c.x || c.id === null) return;
+    var label = c.p >= 0.5 ? 1 : 0;
+    addSample(c.model, c.x, label, 2.2, c.id, 'ok');
+    pushHistory(c.model, { t: Date.now(), name: c.name, p: c.p, fb: 'ok', correct: label, comment: '', kind: c.kind });
+    refreshModelPanel();
+    c.ui.yes.disabled = true;
+    c.ui.no.disabled = true;
+    var p2 = predictWith(c.model.b, c.model.w, c.x);
+    c.ui.status.textContent = 'Спасибо! Модель дообучилась на подтверждении. Текущая оценка: ' +
+      verdictRu(p2) + ' ' + Math.round(p2 * 100) + '%.';
+  }
+
+  function doFeedbackCorrect(c, label) {
+    if (!c.x || c.id === null) return;
+    // глушим авто-пример этой проверки — он был с ошибочной меткой
+    for (var i = 0; i < c.model.samples.length; i++) {
+      if (c.model.samples[i].vid === c.id && c.model.samples[i].src === 'auto') {
+        c.model.samples[i].w = 0.05;
+      }
+    }
+    var comment = c.ui.comment.value ? c.ui.comment.value.slice(0, 200) : '';
+    addSample(c.model, c.x, label, 3.2, c.id, 'fix');
+    pushHistory(c.model, { t: Date.now(), name: c.name, p: c.p, fb: 'fix', correct: label, comment: comment, kind: c.kind });
+    refreshModelPanel();
+    c.ui.correct.style.display = 'none';
+    c.ui.yes.disabled = true;
+    c.ui.no.disabled = true;
+    var p2 = predictWith(c.model.b, c.model.w, c.x);
+    c.ui.status.textContent = 'Модель исправлена! Текущая оценка: ' +
+      verdictRu(p2) + ' ' + Math.round(p2 * 100) + '%. Нейросеть стала точнее.';
+    if (comment) {
+      c.ui.status.textContent += ' Ваш комментарий сохранён.';
+    }
+  }
+
+  function resetFeedbackUI(c, p) {
+    c.ui.predWord.textContent = verdictRu(p);
+    c.ui.yes.disabled = false;
+    c.ui.no.disabled = false;
+    c.ui.main.style.display = 'flex';
+    c.ui.correct.style.display = 'none';
+    c.ui.comment.value = '';
+    c.ui.status.textContent = '';
+  }
+
+  function handleFile(file) {
+    if (!file.type || file.type.indexOf('video/') !== 0) {
+      showError('Пожалуйста, выберите видеофайл');
+      return;
+    }
+    hideError();
+    currentFile = file;
+    videoCtx.name = file.name;
+    fileNameEl.textContent = '📁 ' + file.name;
+    fileSizeEl.textContent = formatSize(file.size);
+    fileInfo.classList.add('show');
+
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = URL.createObjectURL(file);
+    preview.innerHTML = '<video src="' + lastUrl + '" muted playsinline controls></video>';
+
+    analyzeBtn.disabled = false;
+    resultBox.classList.remove('show');
+    progressContainer.classList.remove('show');
+  }
+
+  /* ===== Проверка видео по ссылке ===== */
+
+  var URL_MAX_BYTES = 1.2 * 1024 * 1024 * 1024; // предохранитель: ~1.2 ГБ в память браузера
+
+  function videoTypeByName(name) {
+    var ext = (String(name).match(/\.([a-z0-9]{2,5})$/i) || [])[1] || '';
+    ext = ext.toLowerCase();
+    if (ext === 'webm') return 'video/webm';
+    if (ext === 'mov') return 'video/quicktime';
+    if (ext === 'avi') return 'video/x-msvideo';
+    if (ext === 'mkv') return 'video/x-matroska';
+    if (ext === 'm4v') return 'video/x-m4v';
+    return 'video/mp4';
+  }
+
+  function urlFileName(u) {
+    var name = 'видео_по_ссылке.mp4';
+    try {
+      var parts = new URL(u).pathname.split('/').filter(Boolean);
+      if (parts.length) {
+        var last = decodeURIComponent(parts[parts.length - 1]);
+        if (last && /\.[a-z0-9]{2,5}$/i.test(last)) name = last;
+      }
+    } catch (e) { /* оставляем имя по умолчанию */ }
+    if (name.length > 60) name = name.slice(0, 58) + '…';
+    return name;
+  }
+
+  function loadFromUrl() {
+    var u = (videoUrlInput.value || '').trim();
+    if (!/^https?:\/\//i.test(u)) {
+      showError('Вставьте ссылку, начинающуюся с http:// или https://');
+      return;
+    }
+    if (!window.fetch) {
+      showError('Этот браузер не умеет загружать по ссылке — скачайте файл и перетащите его сюда');
+      return;
+    }
+    hideError();
+    loadUrlBtn.disabled = true;
+    loadUrlBtn.textContent = 'Скачивание…';
+    videoUrlInput.disabled = true;
+    progressContainer.classList.add('show');
+    setProgress(4, 'Скачивание видео по ссылке…');
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var abortT = ctrl ? setTimeout(function () { ctrl.abort(); }, 180000) : null;
+    var restore = function () {
+      if (abortT) clearTimeout(abortT);
+      loadUrlBtn.disabled = false;
+      loadUrlBtn.textContent = 'Загрузить';
+      videoUrlInput.disabled = false;
+    };
+
+    fetch(u, { mode: 'cors', redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error('сервер ответил код ' + resp.status);
+        var total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+        if (total > URL_MAX_BYTES) {
+          throw new Error('файл слишком большой (' + formatSize(total) + ') — скачайте его на устройство и перетащите сюда');
+        }
+        if (!resp.body || !window.ReadableStream) {
+          return resp.blob().then(function (b) { return { blob: b, got: b.size }; });
+        }
+        var reader = resp.body.getReader();
+        var chunks = [], got = 0, lastT = 0;
+        function pump(chunk) {
+          if (chunk.done) return;
+          if (chunk.value && chunk.value.length) {
+            chunks.push(chunk.value);
+            got += chunk.value.length;
+            var now = Date.now();
+            if (now - lastT > 250) {
+              lastT = now;
+              if (total) setProgress(4 + Math.min(61, 61 * got / total), 'Скачивание: ' + formatSize(got) + ' из ' + formatSize(total) + '…');
+              else setProgress(20, 'Скачивание: ' + formatSize(got) + '…');
+            }
+          }
+          return reader.read().then(pump);
+        }
+        return reader.read().then(pump).then(function () {
+          return { blob: new Blob(chunks), got: got };
+        });
+      })
+      .then(function (r) {
+        if (r.got < 2048) throw new Error('по ссылке вернулся файл меньше 2 КБ — это не видео');
+        var name = urlFileName(u);
+        var type = r.blob.type && r.blob.type.indexOf('video/') === 0 ? r.blob.type : videoTypeByName(name);
+        var f;
+        try {
+          f = new File([r.blob], name, { type: type });
+        } catch (e2) {
+          f = new Blob([r.blob], { type: type });
+          f.name = name;
+        }
+        setProgress(70, 'Видео получено (' + formatSize(r.got) + ') — открываю…');
+        restore();
+        handleFile(f);
+      })
+      .catch(function (err) {
+        restore();
+        progressContainer.classList.remove('show');
+        var why = err && err.message ? err.message : 'сайт запрещает доступ из браузера';
+        if (err && err.name === 'AbortError') {
+          why = 'сервер не ответил за 3 минуты';
+        } else if (err && err.name === 'TypeError') {
+          why = 'сайт запрещает прямое скачивание из браузера (защита CORS)';
+        }
+        showError('Не удалось скачать видео по ссылке: ' + why + '. Ссылки на страницы YouTube, VK и TikTok так не работают — скачайте видео на устройство и перетащите файл сюда. Работают прямые ссылки на сам файл (.mp4, .webm) с сайтов с открытой выдачей, например Wikimedia или Telegram.');
+      });
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function showError(msg) {
+    errorBox.textContent = '⚠️ ' + msg;
+    errorBox.classList.add('show');
+  }
+  function hideError() {
+    errorBox.classList.remove('show');
+  }
+
+  function setProgress(percent, text) {
+    progressFill.style.width = percent + '%';
+    progressText.textContent = text;
+  }
+  function sleep(ms) {
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  function loadVideo(file) {
+    return new Promise(function (resolve, reject) {
+      var v = document.createElement('video');
+      v.src = URL.createObjectURL(file);
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      var timeout = setTimeout(function () {
+        reject(new Error('Таймаут загрузки видео'));
+      }, 45000);
+      v.onloadedmetadata = function () {
+        clearTimeout(timeout);
+        if (!isFinite(v.duration) || v.duration < 0.1) {
+          reject(new Error('Видео слишком короткое или повреждено'));
+          return;
+        }
+        resolve(v);
+      };
+      v.onerror = function () {
+        clearTimeout(timeout);
+        reject(new Error('Не удалось открыть видео. Попробуйте MP4 (H.264).'));
+      };
+    });
+  }
+
+  function seekTo(video, time) {
+    return new Promise(function (resolve, reject) {
+      var cleanup = function () {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onErr);
+      };
+      var onSeeked = function () { cleanup(); resolve(); };
+      var onErr = function () { cleanup(); reject(new Error('seek error')); };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onErr);
+      if (Math.abs(video.currentTime - time) < 0.01) {
+        cleanup();
+        resolve();
+        return;
+      }
+      try {
+        video.currentTime = time;
+      } catch (e) {
+        cleanup();
+        reject(e);
+      }
+    });
+  }
+
+  // план покадрового анализа: весь ролик от начала до конца
+  function planFrames(dur, mode) {
+    var FPS = 30;
+    var n;
+    if (mode === 'slow') {
+      n = Math.min(MODE_SLOW_FRAMES, Math.max(8, Math.round(dur * FPS)));
+    } else {
+      n = Math.min(MODE_FAST_FRAMES, Math.max(6, Math.round(dur * FPS * 0.4)));
+    }
+    n = Math.min(n, Math.max(6, Math.round(dur * FPS)));
+    var times = [];
+    for (var i = 0; i < n; i++) {
+      var t = (i + 0.5) * dur / n;
+      times.push(Math.min(Math.max(t, 0.02), dur - 0.02));
+    }
+    return { times: times, step: dur / n };
+  }
+
+  function nowMs() {
+    return (window.performance && performance.now) ? performance.now() : Date.now();
+  }
+
+  async function runAnalysis() {
+    if (!currentFile) return;
+    var mode = getMode();
+    hideError();
+    analyzeBtn.disabled = true;
+    resultBox.classList.remove('show');
+    progressContainer.classList.add('show');
+    progressFill.style.width = '0%';
+
+    try {
+      setProgress(4, 'Загрузка видео…');
+      var video = await loadVideo(currentFile);
+      var vw = video.videoWidth || 640, vh = video.videoHeight || 360;
+      var scale = Math.min(1, WORK_MAX / Math.max(vw, vh));
+      var cw = Math.max(2, Math.round(vw * scale));
+      var ch = Math.max(2, Math.round(vh * scale));
+      var dur = video.duration;
+
+      var canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      var ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      var plan = planFrames(dur, mode);
+      var modeName = mode === 'slow' ? 'Точный анализ' : 'Быстрый анализ';
+      var maxMs = mode === 'slow' ? MODE_SLOW_MAX_MS : MODE_FAST_MAX_MS;
+      var t0 = nowMs();
+      var truncated = false;
+
+      var frames = [];
+      for (var i = 0; i < plan.times.length; i++) {
+        var pct = 8 + Math.round((i / plan.times.length) * 72);
+        setProgress(pct, modeName + ': кадр ' + (i + 1) + '/' + plan.times.length +
+          ' (' + Math.round(((i + 1) / plan.times.length) * 100) + '% видео)');
+        try {
+          await seekTo(video, plan.times[i]);
+          ctx.drawImage(video, 0, 0, cw, ch);
+          frames.push(analyzeFrame(ctx.getImageData(0, 0, cw, ch)));
+        } catch (e) {
+          // пропускаем проблемный кадр
+        }
+        await sleep(0);
+        if (nowMs() - t0 > maxMs && frames.length >= 16) {
+          truncated = true;
+          break;
+        }
+      }
+      if (frames.length < 5) {
+        throw new Error('Не удалось извлечь достаточно кадров');
+      }
+
+      setProgress(84, 'Сведение признаков всего видео…');
+      var timing = { dur: dur, step: plan.step, mode: mode };
+      var agg = aggregate(frames, timing);
+      await sleep(60);
+
+      setProgress(90, 'Оценка нейросетью…');
+      var p = predictWith(videoModel.b, videoModel.w, agg.x);
+      await sleep(60);
+
+      setProgress(95, 'Дообучение на этом видео…');
+      videoCtx.id = Date.now() + Math.floor(Math.random() * 100000);
+      addSample(videoModel, agg.x, p >= 0.5 ? 1 : 0, (p > 0.85 || p < 0.15) ? 0.5 : 0.3, videoCtx.id, 'auto');
+      pushHistory(videoModel, { t: Date.now(), name: videoCtx.name, p: p, fb: 'auto', correct: null, comment: '', kind: 'video' });
+      refreshModelPanel();
+      await sleep(80);
+
+      var conf = Math.round(Math.min(99, Math.max(52, 50 + Math.abs(p - 0.5) * 98)));
+      if (!agg.faceFound) conf = Math.min(conf, 72);
+      if (frames.length < 8) conf = Math.min(conf, 78);
+
+      var verdict = p >= 0.60 ? 'fake' : (p >= 0.40 ? 'suspect' : 'real');
+
+      var kbps = currentFile.size * 8 / 1000 / dur;
+      var metaLines = [
+        'Изучено кадров: ' + frames.length + (truncated ? ' (из ' + plan.times.length + ')' : '') +
+          ' — ' + (mode === 'slow' ? 'режим «Точный»' : 'режим «Быстрый»'),
+        'Лицо: ' + (agg.faceFound ? 'найдено' : 'не найдено — анализ центральной области'),
+        'Разрешение: ' + cw + '×' + ch,
+        'Длительность: ' + dur.toFixed(1) + ' с'
+      ];
+      if (agg.sceneCount > 1) metaLines.push('Сцен: ' + agg.sceneCount);
+      if (agg.blink.perSec >= 0) metaLines.push('Морганий: ' + agg.blink.dips + ' (' + (agg.blink.perSec * 60).toFixed(0) + '/мин)');
+      if (kbps < 180) metaLines.push('низкий битрейт — сжатие может мешать анализу');
+
+      videoCtx.x = agg.x;
+      videoCtx.p = p;
+      setProgress(100, 'Готово');
+      showResult({
+        verdict: verdict,
+        p: p,
+        conf: conf,
+        x: agg.x,
+        metaLines: metaLines,
+        chart: agg.chart
+      });
+    } catch (err) {
+      showError(err.message || 'Ошибка анализа');
+      analyzeBtn.disabled = false;
+    } finally {
+      setTimeout(function () { progressContainer.classList.remove('show'); }, 600);
+    }
+  }
+
+  function drawChart(canvas, vals) {
+    var w = canvas.clientWidth || 700;
+    var h = 110;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    var c = canvas.getContext('2d');
+    c.scale(dpr, dpr);
+    c.clearRect(0, 0, w, h);
+
+    c.fillStyle = 'rgba(255,255,255,0.045)';
+    c.fillRect(0, 0, w, h);
+
+    var pad = 6, top = 10, bottom = 10;
+    var plotH = h - top - bottom;
+    var yTh = top + (1 - 0.55) * plotH;
+
+    c.strokeStyle = 'rgba(239,68,68,0.5)';
+    c.setLineDash([5, 5]);
+    c.beginPath();
+    c.moveTo(pad, yTh);
+    c.lineTo(w - pad, yTh);
+    c.stroke();
+    c.setLineDash([]);
+
+    var n = vals.length;
+    if (!n) return;
+    c.beginPath();
+    for (var i = 0; i < n; i++) {
+      var x = pad + (i / Math.max(1, n - 1)) * (w - 2 * pad);
+      var y = top + (1 - Math.min(1, vals[i])) * plotH;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    var grad = c.createLinearGradient(pad, 0, w - pad, 0);
+    grad.addColorStop(0, '#4facfe');
+    grad.addColorStop(1, '#a855f7');
+    c.strokeStyle = grad;
+    c.lineWidth = 2;
+    c.stroke();
+
+    c.fillStyle = 'rgba(255,255,255,0.35)';
+    c.font = '10px Segoe UI, sans-serif';
+    c.fillText('0%', pad, h - 2);
+    c.fillText('100%', w - 26, h - 2);
+    c.fillStyle = 'rgba(239,68,68,0.8)';
+    c.fillText('порог подозрения', pad + 44, Math.max(9, yTh - 4));
+  }
+
+  function showResult(data) {
+    resultBox.classList.remove('fake', 'real', 'suspect');
+    resultBox.classList.add(data.verdict);
+    resultBox.classList.add('show');
+
+    var icon = data.verdict === 'real' ? '✅' : (data.verdict === 'fake' ? '⚠️' : '❓');
+    var title = data.verdict === 'real' ? 'Видео выглядит настоящим'
+      : (data.verdict === 'fake' ? 'Обнаружен дипфейк' : 'Замечены признаки подделки');
+
+    document.getElementById('resultIcon').textContent = icon;
+    document.getElementById('resultTitle').textContent = title;
+    document.getElementById('resultConfidence').textContent =
+      'Уверенность: ' + data.conf + '% · оценка нейросети: ' + data.p.toFixed(3);
+    document.getElementById('confidenceFill').style.width = data.conf + '%';
+
+    var container = document.getElementById('featuresContainer');
+    container.innerHTML = '';
+    for (var i = 0; i < FEATURE_LABELS.length; i++) {
+      var label = FEATURE_LABELS[i];
+      var val = Math.round(data.x[i] * 100);
+      var row = document.createElement('div');
+      row.className = 'feature-row';
+      row.title = FEATURE_HINTS[i];
+      row.innerHTML =
+        '<div class="label">' + label + '</div>' +
+        '<div class="bar-track"><div class="bar-val"></div></div>' +
+        '<div class="num">' + val + '%</div>';
+      container.appendChild(row);
+      (function (barEl, v) {
+        setTimeout(function () { barEl.style.width = v + '%'; }, 50);
+      })(row.querySelector('.bar-val'), val);
+    }
+
+    drawChart(chartCanvas, data.chart);
+    chartCaption.textContent = 'Каждая точка — подозрительность кадра (0–100%). Выше красной линии — кадр с признаками подделки. Изучено кадров: ' + data.chart.length + '.';
+
+    document.getElementById('resultMeta').textContent = data.metaLines.join(' · ');
+
+    resetFeedbackUI(videoCtx, data.p);
+
+    analyzeBtn.disabled = false;
+    chartBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function resetApp() {
+    currentFile = null;
+    videoCtx.x = null;
+    videoCtx.p = 0;
+    videoCtx.id = null;
+    fileInput.value = '';
+    fileInfo.classList.remove('show');
+    preview.innerHTML = '';
+    resultBox.classList.remove('show');
+    progressContainer.classList.remove('show');
+    progressFill.style.width = '0%';
+    analyzeBtn.disabled = true;
+    hideError();
+    if (lastUrl) {
+      URL.revokeObjectURL(lastUrl);
+      lastUrl = null;
+    }
+  }
+
+  /* ==================== ФОТО: анализ сгенерированных изображений ==================== */
+
+  function switchTab(tab) {
+    activeTab = tab;
+    tabVideo.classList.toggle('selected', tab === 'video');
+    tabPhoto.classList.toggle('selected', tab === 'photo');
+    videoApp.style.display = (tab === 'video') ? '' : 'none';
+    photoApp.style.display = (tab === 'photo') ? '' : 'none';
+  }
+  tabVideo.addEventListener('click', function () { switchTab('video'); });
+  tabPhoto.addEventListener('click', function () { switchTab('photo'); });
+
+  function setPProgress(percent, text) {
+    pProgressFill.style.width = percent + '%';
+    pProgressText.textContent = text;
+  }
+  function showPhotoError(msg) {
+    pErrorBox.textContent = '⚠️ ' + msg;
+    pErrorBox.classList.add('show');
+  }
+  function hidePhotoError() {
+    pErrorBox.classList.remove('show');
+  }
+
+  function loadPhoto(file) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      var timeout = setTimeout(function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('Таймаут загрузки изображения'));
+      }, 20000);
+      img.onload = function () {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = function () {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        reject(new Error('Не удалось открыть изображение. Попробуйте JPG или PNG.'));
+      };
+      img.src = url;
+    });
+  }
+
+  // карта подозрительности: сетка 8 x 4 областей, сравнение каждой с медианой всего фото
+  function photoTileSuspicion(g, w, h) {
+    var COLS = 8, ROWS = 4;
+    var tw = Math.floor(w / COLS), th = Math.floor(h / ROWS);
+    if (tw < 14 || th < 14) return null;
+    var cells = [], noises = [], laps = [];
+    for (var ry = 0; ry < ROWS; ry++) {
+      for (var cx = 0; cx < COLS; cx++) {
+        var x0 = cx * tw, y0 = ry * th;
+        var wv = (cx === COLS - 1) ? (w - x0) : tw;
+        var hv = (ry === ROWS - 1) ? (h - y0) : th;
+        if (wv < 14 || hv < 14) { cells.push(null); noises.push(0); laps.push(0); continue; }
+        var sub = new Float32Array(wv * hv);
+        for (var y = 0; y < hv; y++) {
+          for (var x = 0; x < wv; x++) sub[y * wv + x] = g[(y0 + y) * w + (x0 + x)];
+        }
+        var nz = gaussResidualMAD(sub, wv, hv);
+        var lp = meanAbsLap(sub, wv, hv);
+        cells.push({ nz: nz, lp: lp });
+        noises.push(nz);
+        laps.push(lp);
+      }
+    }
+    var nzValid = [], lpValid = [];
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i] && cells[i].nz > 0) nzValid.push(cells[i].nz);
+      if (cells[i] && cells[i].lp > 0) lpValid.push(cells[i].lp);
+    }
+    if (nzValid.length < 8 || lpValid.length < 8) return null;
+    var medNz = median(nzValid), medLp = median(lpValid);
+    var out = [];
+    for (var j = 0; j < cells.length; j++) {
+      if (!cells[j]) { out.push(0); continue; }
+      var s = 0;
+      if (medNz > 0.004) s += 0.55 * clip01((0.85 - cells[j].nz / medNz) / 0.55);
+      if (medLp > 1e-4) s += 0.45 * clip01((1 - cells[j].lp / medLp) / 0.8);
+      out.push(clip01(s));
+    }
+    return out;
+  }
+
+  // тепловая карта областей фото: синий — норма, красный — следы генерации
+  function drawTileChart(canvas, vals, cols) {
+    var w = canvas.clientWidth || 700;
+    var h = canvas.clientHeight || 180;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    var c = canvas.getContext('2d');
+    c.scale(dpr, dpr);
+    c.clearRect(0, 0, w, h);
+
+    c.fillStyle = 'rgba(255,255,255,0.045)';
+    c.fillRect(0, 0, w, h);
+
+    var rows = Math.ceil(vals.length / cols);
+    var pad = 8;
+    var gw = (w - 2 * pad) / cols, gh = (h - 2 * pad) / rows;
+    for (var i = 0; i < vals.length; i++) {
+      var cxi = i % cols, cyi = Math.floor(i / cols);
+      var v = Math.max(0, Math.min(1, vals[i]));
+      var r, g2, b2, a;
+      if (v < 0.5) {
+        var t = v / 0.5;
+        r = Math.round(79 + (245 - 79) * t);
+        g2 = Math.round(172 + (158 - 172) * t);
+        b2 = Math.round(254 + (11 - 254) * t);
+        a = 0.16 + 0.55 * t;
+      } else {
+        var t2 = (v - 0.5) / 0.5;
+        r = Math.round(245 + (239 - 245) * t2);
+        g2 = Math.round(158 + (68 - 158) * t2);
+        b2 = Math.round(11 + (68 - 11) * t2);
+        a = 0.55 + 0.35 * t2;
+      }
+      c.fillStyle = 'rgba(' + r + ',' + g2 + ',' + b2 + ',' + a.toFixed(2) + ')';
+      c.fillRect(pad + cxi * gw + 1.5, pad + cyi * gh + 1.5, gw - 3, gh - 3);
+      if (v >= 0.55) {
+        c.strokeStyle = 'rgba(239,68,68,0.9)';
+        c.lineWidth = 1.5;
+        c.strokeRect(pad + cxi * gw + 1.5, pad + cyi * gh + 1.5, gw - 3, gh - 3);
+      }
+    }
+  }
+
+  // опорные патчи по всей сцене (вне центральной области) — надежнее краёв кадра
+  // для фотографий с разнородным содержимым: небо, трава, объекты
+  function photoReferenceStats(data, W, H, cx0, cy0, cx1, cy1) {
+    var side = Math.max(48, Math.min(120, Math.round(Math.min(W, H) * 0.22)));
+    var fracs = [
+      [0.04, 0.04], [0.58, 0.04], [0.30, 0.10], [0.04, 0.42],
+      [0.80, 0.42], [0.06, 0.72], [0.38, 0.80], [0.72, 0.72],
+      [0.30, 0.42], [0.58, 0.58]
+    ];
+    var peaks = [], hfs = [], noises = [], corrs = [];
+    for (var i = 0; i < fracs.length; i++) {
+      var px = Math.round(fracs[i][0] * (W - side));
+      var py = Math.round(fracs[i][1] * (H - side));
+      if (px < 0) px = 0;
+      if (py < 0) py = 0;
+      if (px + side > cx0 && px < cx1 && py + side > cy0 && py < cy1) continue;
+      var gg = cropResizeGray(data, W, H, px, py, side, side, 64);
+      if (laplacianVar(gg, 64, 64) < 2e-4) continue;
+      var pw = fft2dPower(gg, 64);
+      var pk = spectralPeaks(pw, 64);
+      var st = spectralHf(pw, 64);
+      if (st.energy < 1e-9) continue;
+      peaks.push(pk);
+      hfs.push(st.hfRatio);
+      var rp = extractRegionPlanes(data, W, H, px, py, side, side, 120);
+      noises.push(gaussResidualMAD(rp.g, rp.w, rp.h));
+      var ly = lapAbsArr(rp.g, rp.w, rp.h);
+      var lcb = lapAbsArr(rp.cb, rp.w, rp.h);
+      var lcr = lapAbsArr(rp.cr, rp.w, rp.h);
+      corrs.push((pearson(ly, lcb) + pearson(ly, lcr)) / 2);
+    }
+    return {
+      peak: peaks.length ? median(peaks) : null,
+      hf: hfs.length ? median(hfs) : null,
+      noise: noises.length ? median(noises) : null,
+      corr: corrs.length ? median(corrs) : null,
+      count: peaks.length
+    };
+  }
+
+  // периодичность остаточного шума: апскейлеры диффузионных моделей оставляют
+  // checkerboard-решётку — энергия остатка «моргает» с шагом, кратным латент-сетке
+  function gridPeriodicity(g, w, h) {
+    if (w < 96 || h < 96) return 0;
+    var res = new Float32Array(w * h);
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var i = y * w + x;
+        var blur = (g[i - w - 1] + 2 * g[i - w] + g[i - w + 1] +
+                    2 * g[i - 1] + 4 * g[i] + 2 * g[i + 1] +
+                    g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]) / 16;
+        res[i] = g[i] - blur;
+      }
+    }
+    var ex = new Float64Array(w), ey = new Float64Array(h);
+    for (var y2 = 1; y2 < h - 1; y2++) {
+      for (var x2 = 1; x2 < w - 1; x2++) {
+        var r2 = res[y2 * w + x2] * res[y2 * w + x2];
+        ex[x2] += r2;
+        ey[y2] += r2;
+      }
+    }
+    function lagScore(prof, n, lag) {
+      if (n < lag * 4) return 0;
+      var s = 0, c = 0;
+      for (var i = lag; i < n; i++) { s += prof[i] * prof[i - lag]; c++; }
+      var e = 0;
+      for (var j = 0; j < n; j++) e += prof[j] * prof[j];
+      if (e < 1e-12 || c < 24) return 0;
+      return (s / c) / (e / n);
+    }
+    var lags = [4, 8, 16, 32, 64];
+    var best = 0, bestLag = 0;
+    for (var li = 0; li < lags.length; li++) {
+      var sx = lagScore(ex, w, lags[li]);
+      var sy = lagScore(ey, h, lags[li]);
+      if (sx > best) { best = sx; bestLag = lags[li]; }
+      if (sy > best) { best = sy; bestLag = lags[li]; }
+    }
+    return best;
+  }
+
+  function loadImgSrc(src) {
+    return new Promise(function (resolve, reject) {
+      var im = new Image();
+      im.onload = function () { resolve(im); };
+      im.onerror = function () { reject(new Error('ELA: не удалось пережать изображение')); };
+      im.src = src;
+    });
+  }
+
+  // ELA: пережимаем фото в JPEG и сравниваем — у реальных снимков ошибка сжатия
+  // рваная (контуры/текстуры), у генераций — равномерно размазанная по всему кадру
+  async function elaStats(imgData, cw, ch) {
+    try {
+      var c1 = document.createElement('canvas');
+      c1.width = cw;
+      c1.height = ch;
+      c1.getContext('2d').putImageData(imgData, 0, 0);
+      var url = c1.toDataURL('image/jpeg', 0.72);
+      var img = await loadImgSrc(url);
+      var c2 = document.createElement('canvas');
+      c2.width = cw;
+      c2.height = ch;
+      var ctx2 = c2.getContext('2d', { willReadFrequently: true });
+      ctx2.drawImage(img, 0, 0, cw, ch);
+      var d2 = ctx2.getImageData(0, 0, cw, ch).data;
+      var d1 = imgData.data;
+      var COLS = 8;
+      var ROWS = Math.max(3, Math.round(COLS * ch / cw));
+      var tw = Math.floor(cw / COLS), th = Math.floor(ch / ROWS);
+      if (tw < 8 || th < 8) return 0.25;
+      var vals = [];
+      for (var ry = 0; ry < ROWS; ry++) {
+        for (var cx = 0; cx < COLS; cx++) {
+          var s = 0, cnt = 0;
+          var x0 = cx * tw, y0 = ry * th;
+          for (var y = y0; y < y0 + th; y += 2) {
+            for (var x = x0; x < x0 + tw; x += 2) {
+              var i4 = (y * cw + x) * 4;
+              var l1 = 0.299 * d1[i4] + 0.587 * d1[i4 + 1] + 0.114 * d1[i4 + 2];
+              var l2 = 0.299 * d2[i4] + 0.587 * d2[i4 + 1] + 0.114 * d2[i4 + 2];
+              s += Math.abs(l1 - l2);
+              cnt++;
+            }
+          }
+          if (cnt) vals.push(s / cnt);
+        }
+      }
+      if (vals.length < 12) return 0.25;
+      var mean = 0;
+      for (var i = 0; i < vals.length; i++) mean += vals[i];
+      mean /= vals.length;
+      if (mean < 0.6) return 0.25; // изображение уже сильно пережато — ELA не информативна
+      var va = 0;
+      for (var j = 0; j < vals.length; j++) va += (vals[j] - mean) * (vals[j] - mean);
+      var cv = Math.sqrt(va / vals.length) / mean;
+      var cvScore = clip01((0.60 - cv) / 0.50);
+      // ровное свечение: даже на самых «гладких» участках у генераций ошибка заметно выше нуля
+      var sortedV = Array.prototype.slice.call(vals).sort(function (p, q) { return p - q; });
+      var qn = Math.max(1, Math.floor(sortedV.length * 0.25));
+      var flat = 0;
+      for (var f2 = 0; f2 < qn; f2++) flat += sortedV[f2];
+      flat = flat / qn;
+      var flatScore = flat > 0.4 ? clip01((flat - 1.0) / 2.2) : 0;
+      return Math.max(cvScore, flatScore);
+    } catch (e) {
+      return 0.25;
+    }
+  }
+
+  async function runPhotoAnalysis() {
+    if (!photoFile) return;
+    hidePhotoError();
+    pAnalyzeBtn.disabled = true;
+    pResultBox.classList.remove('show');
+    pProgressContainer.classList.add('show');
+    pProgressFill.style.width = '0%';
+
+    try {
+      setPProgress(6, 'Загрузка изображения…');
+      var img = await loadPhoto(photoFile);
+      var vw = img.naturalWidth || img.width;
+      var vh = img.naturalHeight || img.height;
+      if (Math.min(vw, vh) < 48) {
+        throw new Error('Изображение слишком маленькое для анализа');
+      }
+      var scale = Math.min(1, WORK_MAX / Math.max(vw, vh));
+      var cw = Math.max(2, Math.round(vw * scale));
+      var ch = Math.max(2, Math.round(vh * scale));
+
+      setPProgress(22, 'Форензический разбор изображения…');
+      await sleep(30);
+      var canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      var c2d = canvas.getContext('2d', { willReadFrequently: true });
+      c2d.drawImage(img, 0, 0, cw, ch);
+      var imgData = c2d.getImageData(0, 0, cw, ch);
+      var f = analyzeFrame(imgData);
+
+      var full = extractRegionPlanes(imgData.data, cw, ch, 0, 0, cw, ch, 256);
+      var fullTile = tileCV(full.g, full.w, full.h, 6);
+      var chartVals = photoTileSuspicion(full.g, full.w, full.h);
+
+      setPProgress(58, 'Спектральный и шумовой анализ…');
+      await sleep(30);
+      var box = f.box || { x: 0, y: 0, w: cw, h: ch };
+      var ref = photoReferenceStats(imgData.data, cw, ch, box.x, box.y, box.x + box.w, box.y + box.h);
+      var peakRef = ref.peak !== null ? ref.peak : f.peakB;
+      var hfRef = ref.hf !== null ? ref.hf : f.hfB;
+      var noiseRef = (ref.noise !== null && ref.noise > 0.004) ? ref.noise : f.noiseB;
+      var corrRef = ref.corr !== null ? ref.corr : f.corrB;
+      var x1v = 0.55 * clip01(((f.peakF - peakRef) - 0.25) / 0.30) + 0.45 * clip01((f.peakF - 0.55) / 0.35);
+      var x2v = hfRef > 1e-4 ? clip01((1 - f.hfF / hfRef) / 1.1) : 0;
+      var x3v = noiseRef > 0.004 ? clip01((0.82 - f.noiseF / noiseRef) / 0.65) : clip01((0.024 - f.noiseF) / 0.030);
+      var x4v = clip01(((corrRef - f.corrF) + 0.03) / 0.42);
+      var x5v = clip01((f.noiseUniform - 0.55) / 0.60);
+      var x6v = clip01((0.45 - f.tileCVv) / 0.45);
+      var x7v = (f.faceFound && f.sym >= 0) ? clip01((0.30 - f.sym) / 0.30) : 0.15;
+      var x8v = fullTile > 0 ? clip01((0.45 - fullTile) / 0.45) : 0.10;
+
+      setPProgress(64, 'Чистота цветности и насыщенность…');
+      await sleep(20);
+      var fr2 = extractRegionPlanes(imgData.data, cw, ch, box.x, box.y, box.w, box.h, 200);
+      var lapG = meanAbsLap(fr2.g, fr2.w, fr2.h);
+      var lapC = (meanAbsLap(fr2.cb, fr2.w, fr2.h) + meanAbsLap(fr2.cr, fr2.w, fr2.h)) / 2;
+      var chromaRatio = lapG > 1e-5 ? lapC / lapG : 1;
+      var x9v = chromaRatio < 0.15 ? clip01((0.15 - chromaRatio) / 0.15) : 0;
+
+      var satSum = 0, satCnt = 0;
+      var dpx = imgData.data;
+      for (var spi = 0; spi < dpx.length; spi += 16) {
+        var sR = dpx[spi], sG = dpx[spi + 1], sB = dpx[spi + 2];
+        var mx = Math.max(sR, sG, sB), mn = Math.min(sR, sG, sB);
+        if (mx > 12) { satSum += (mx - mn) / mx; satCnt++; }
+      }
+      var satMean = satCnt ? satSum / satCnt : 0;
+      var x10v = clip01((satMean - 0.45) / 0.25);
+
+      setPProgress(72, 'ELA-анализ следа сжатия…');
+      var x11v = await elaStats(imgData, cw, ch);
+
+      setPProgress(76, 'Поиск решётки апскейлера…');
+      await sleep(20);
+      var fullRes = extractRegionPlanes(imgData.data, cw, ch, 0, 0, cw, ch, Math.max(cw, ch));
+      var gridScore = gridPeriodicity(fullRes.g, fullRes.w, fullRes.h);
+      var x12v = clip01((gridScore - 0.75) / 0.15);
+
+      var x = [x1v, x2v, x3v, x4v, x5v, x6v, x7v, x8v, x9v, x10v, x11v, x12v];
+
+      setPProgress(80, 'Оценка нейросетью…');
+      var p = predictWith(photoModel.b, photoModel.w, x);
+      await sleep(60);
+
+      setPProgress(90, 'Дообучение на этом фото…');
+      photoCtx.id = Date.now() + Math.floor(Math.random() * 100000);
+      addSample(photoModel, x, p >= 0.5 ? 1 : 0, (p > 0.85 || p < 0.15) ? 0.5 : 0.4, photoCtx.id, 'auto');
+      pushHistory(photoModel, { t: Date.now(), name: photoCtx.name, p: p, fb: 'auto', correct: null, comment: '', kind: 'photo' });
+      refreshModelPanel();
+      await sleep(60);
+
+      var conf = Math.round(Math.min(99, Math.max(52, 50 + Math.abs(p - 0.5) * 98)));
+      if (!f.faceFound) conf = Math.min(conf, 80);
+      if (Math.min(vw, vh) < 220) conf = Math.min(conf, 76);
+      var verdict = p >= 0.60 ? 'fake' : (p >= 0.40 ? 'suspect' : 'real');
+
+      var metaLines = [
+        'Изучено изображение целиком: ' + cw + '×' + ch + ' px',
+        'Лицо: ' + (f.faceFound ? 'найдено' : 'не найдено — анализ всей сцены'),
+        'Файл: ' + formatSize(photoFile.size)
+      ];
+
+      photoCtx.x = x;
+      photoCtx.p = p;
+      setPProgress(100, 'Готово');
+      showPhotoResult({
+        verdict: verdict,
+        p: p,
+        conf: conf,
+        x: x,
+        metaLines: metaLines,
+        chart: chartVals
+      });
+    } catch (err) {
+      showPhotoError(err.message || 'Ошибка анализа');
+      pAnalyzeBtn.disabled = false;
+    } finally {
+      setTimeout(function () { pProgressContainer.classList.remove('show'); }, 600);
+    }
+  }
+
+  function showPhotoResult(data) {
+    pResultBox.classList.remove('fake', 'real', 'suspect');
+    pResultBox.classList.add(data.verdict);
+    pResultBox.classList.add('show');
+
+    var icon = data.verdict === 'real' ? '✅' : (data.verdict === 'fake' ? '⚠️' : '❓');
+    var title = data.verdict === 'real' ? 'Фото выглядит настоящим'
+      : (data.verdict === 'fake' ? 'Обнаружено сгенерированное фото' : 'Замечены признаки генерации');
+
+    document.getElementById('pResultIcon').textContent = icon;
+    document.getElementById('pResultTitle').textContent = title;
+    document.getElementById('pResultConfidence').textContent =
+      'Уверенность: ' + data.conf + '% · оценка нейросети: ' + data.p.toFixed(3);
+    document.getElementById('pConfidenceFill').style.width = data.conf + '%';
+
+    var container = document.getElementById('pFeaturesContainer');
+    container.innerHTML = '';
+    for (var i = 0; i < PHOTO_FEATURE_LABELS.length; i++) {
+      var label = PHOTO_FEATURE_LABELS[i];
+      var val = Math.round(data.x[i] * 100);
+      var row = document.createElement('div');
+      row.className = 'feature-row';
+      row.title = PHOTO_FEATURE_HINTS[i];
+      row.innerHTML =
+        '<div class="label">' + label + '</div>' +
+        '<div class="bar-track"><div class="bar-val"></div></div>' +
+        '<div class="num">' + val + '%</div>';
+      container.appendChild(row);
+      (function (barEl, v) {
+        setTimeout(function () { barEl.style.width = v + '%'; }, 50);
+      })(row.querySelector('.bar-val'), val);
+    }
+
+    if (data.chart && data.chart.length >= 8) {
+      pChartBox.style.display = '';
+      drawTileChart(pChartCanvas, data.chart, 8);
+      pChartCaption.textContent = 'Каждый блок — подозрительность области фото (0–100%): красное — пересглаженная текстура и стерильный шум вставки или генерации. Если карта равномерно синяя — подозрительные признаки распределены по всему фото, а не в отдельной области.';
+    } else {
+      pChartBox.style.display = 'none';
+    }
+
+    document.getElementById('pResultMeta').textContent = data.metaLines.join(' · ');
+
+    resetFeedbackUI(photoCtx, data.p);
+
+    pAnalyzeBtn.disabled = false;
+    pResultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function handlePhotoFile(file) {
+    if (!file.type || file.type.indexOf('image/') !== 0) {
+      showPhotoError('Пожалуйста, выберите файл изображения');
+      return;
+    }
+    hidePhotoError();
+    photoFile = file;
+    photoCtx.name = file.name;
+    pFileNameEl.textContent = '🖼 ' + file.name;
+    pFileSizeEl.textContent = formatSize(file.size);
+    pFileInfo.classList.add('show');
+
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = URL.createObjectURL(file);
+    pPreview.innerHTML = '<img src="' + photoUrl + '" alt="Предпросмотр фото">';
+
+    pAnalyzeBtn.disabled = false;
+    pResultBox.classList.remove('show');
+    pProgressContainer.classList.remove('show');
+  }
+
+  function resetPhotoApp() {
+    photoFile = null;
+    photoCtx.x = null;
+    photoCtx.p = 0;
+    photoCtx.id = null;
+    pFileInput.value = '';
+    pFileInfo.classList.remove('show');
+    pPreview.innerHTML = '';
+    pResultBox.classList.remove('show');
+    pProgressContainer.classList.remove('show');
+    pProgressFill.style.width = '0%';
+    pAnalyzeBtn.disabled = true;
+    hidePhotoError();
+    if (photoUrl) {
+      URL.revokeObjectURL(photoUrl);
+      photoUrl = null;
+    }
+  }
+
+  pDropZone.addEventListener('click', function () { pFileInput.click(); });
+  pDropZone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    pDropZone.classList.add('dragover');
+  });
+  pDropZone.addEventListener('dragleave', function () {
+    pDropZone.classList.remove('dragover');
+  });
+  pDropZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    pDropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handlePhotoFile(e.dataTransfer.files[0]);
+    }
+  });
+  pFileInput.addEventListener('change', function (e) {
+    if (e.target.files && e.target.files[0]) {
+      handlePhotoFile(e.target.files[0]);
+    }
+  });
+  pAnalyzeBtn.addEventListener('click', runPhotoAnalysis);
+  pResetBtn.addEventListener('click', resetPhotoApp);
+  pFbYes.addEventListener('click', function () { doFeedbackConfirm(photoCtx); });
+  pFbNo.addEventListener('click', function () { openCorrectBranch(photoCtx); });
+  pFbFixReal.addEventListener('click', function () { doFeedbackCorrect(photoCtx, 0); });
+  pFbFixFake.addEventListener('click', function () { doFeedbackCorrect(photoCtx, 1); });
+
+  refreshModelPanel();
+  switchTab('video');
+})();
+</script>
+</body>
+</html>
